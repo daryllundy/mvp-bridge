@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mvpbridge inspect:*)",
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(./mvpbridge --version:*)"
+    ]
+  }
+}
