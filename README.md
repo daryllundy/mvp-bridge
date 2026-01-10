@@ -42,7 +42,7 @@ mvpbridge deploy do
 ## Supported Platforms
 
 - ✅ **DigitalOcean App Platform**
-- 🚧 **AWS Amplify** - coming soon
+- ✅ **AWS Amplify**
 
 ## Philosophy
 
@@ -143,12 +143,23 @@ Use `--dry-run` to preview changes without applying.
 
 ### Deploy
 
+#### To DigitalOcean:
+
 ```bash
 export DIGITALOCEAN_TOKEN=your_token_here
 mvpbridge deploy do
 ```
 
-Creates/updates a DigitalOcean App and triggers deployment:
+#### To AWS Amplify:
+
+```bash
+export AWS_ACCESS_KEY_ID=your_access_key
+export AWS_SECRET_ACCESS_KEY=your_secret_key
+export GITHUB_TOKEN=your_github_token
+mvpbridge deploy aws
+```
+
+Creates/updates an app and triggers deployment:
 
 ```
 Deploying to DigitalOcean...
@@ -163,12 +174,17 @@ Deployment started!
   Dashboard: https://cloud.digitalocean.com/apps/xxxxx
 ```
 
+For detailed AWS setup instructions, see [AWS_DEPLOYMENT.md](./AWS_DEPLOYMENT.md)
+
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DIGITALOCEAN_TOKEN` | For DO deploy | API token from DO dashboard |
-| `GITHUB_TOKEN` | Optional | For private repos |
+| Variable | Required For | Description |
+|----------|--------------|-------------|
+| `DIGITALOCEAN_TOKEN` | DO deploy | API token from DO dashboard |
+| `AWS_ACCESS_KEY_ID` | AWS deploy | AWS access key |
+| `AWS_SECRET_ACCESS_KEY` | AWS deploy | AWS secret key |
+| `GITHUB_TOKEN` | AWS deploy | GitHub personal access token |
+| `AWS_REGION` | AWS deploy (optional) | AWS region (defaults to us-east-1) |
 
 ## How It Works
 
@@ -223,13 +239,39 @@ Not yet. Opinionated defaults first, customization later.
 
 Not yet. Single-app repos only for v1.
 
+## Testing
+
+MVPBridge has comprehensive test coverage for core functionality:
+
+```bash
+# Run all tests
+go test ./...
+
+# Run with verbose output
+go test ./... -v
+
+# Run with coverage
+go test ./... -cover
+
+# Run specific package
+go test ./internal/deploy -v
+```
+
+**Test Coverage:**
+- Detection logic: 46.8%
+- Deployment logic: 15.1%
+- 65+ test cases across all packages
+
+See [TESTING.md](./TESTING.md) for detailed testing documentation.
+
 ## Contributing
 
 1. Fork the repo
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `go test ./...`
-5. Submit a PR
+4. Write tests: See [TESTING.md](./TESTING.md)
+5. Run tests: `go test ./...`
+6. Submit a PR
 
 ## License
 

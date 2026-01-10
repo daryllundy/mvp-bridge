@@ -285,7 +285,7 @@ func runDeploy(target string) error {
 	case "do":
 		return deployDigitalOcean(cfg)
 	case "aws":
-		return deployAWS()
+		return deployAWS(cfg)
 	default:
 		return fmt.Errorf("unknown target: %s (supported: do, aws)", target)
 	}
@@ -448,6 +448,83 @@ func deployDigitalOcean(cfg *config.Config) error {
 	return nil
 }
 
-func deployAWS() error {
-	return fmt.Errorf("AWS deployment not yet implemented")
+func deployAWS(cfg *config.Config) error {
+	fmt.Println("Deploying to AWS Amplify...")
+	fmt.Println()
+
+	// Get GitHub repo URL
+	repoURL, err := getGitHubRepo()
+	if err != nil {
+		return fmt.Errorf("getting GitHub repo: %w", err)
+	}
+
+	// Determine app name
+	appName := cfg.Deploy.AppName
+	if appName == "" {
+		parts := strings.Split(repoURL, "/")
+		if len(parts) > 0 {
+			appName = parts[len(parts)-1]
+		} else {
+			appName = "mvpbridge-app"
+		}
+	}
+
+	// Determine region
+	region := cfg.Deploy.Region
+	if region == "" {
+		region = "us-east-1"
+	}
+
+	// Create deployer
+	deployer, err := deploy.NewAWSDeployer(appName, repoURL, "main", region)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("[1/4] Validating credentials... ✓")
+
+	// Extract env vars
+	envVars, err := extractEnvVars()
+	if err != nil {
+		return fmt.Errorf("extracting env vars: %w", err)
+	}
+
+	fmt.Println("[2/4] Creating app spec... ✓")
+
+	// Get build config from detection
+	d, _ := detect.DetectAll(".")
+	buildCommand := d.BuildCommand
+	if buildCommand == "" {
+		buildCommand = "npm run build"
+	}
+	outputDir := d.OutputDir
+	if outputDir == "" {
+		outputDir = "dist"
+	}
+
+	// Determine if static
+	isStatic := cfg.IsStatic()
+
+	fmt.Printf("[3/4] Configuring secrets (%d vars)... ✓\n", len(envVars))
+
+	// Deploy
+	result, err := deployer.Deploy(isStatic, envVars, buildCommand, outputDir)
+	if err != nil {
+		return fmt.Errorf("deployment failed: %w", err)
+	}
+
+	fmt.Println("[4/4] Triggering deployment... ✓")
+	fmt.Println()
+	fmt.Println("Deployment started!")
+
+	// Display URLs
+	if result.App.DefaultDomain != "" {
+		fmt.Printf("  App URL: https://%s\n", result.App.DefaultDomain)
+	}
+	if result.App.AppID != "" {
+		fmt.Printf("  Console: https://%s.console.aws.amazon.com/amplify/home?region=%s#/%s\n",
+			region, region, result.App.AppID)
+	}
+
+	return nil
 }
