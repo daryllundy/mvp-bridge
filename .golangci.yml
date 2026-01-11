@@ -1,0 +1,88 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck      # Check for unchecked errors
+    - gosimple      # Simplify code
+    - govet         # Vet examines Go source code
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Advanced Go linter
+    - unused        # Check for unused code
+    - gofmt         # Check formatting
+    - goimports     # Check import formatting
+    - misspell      # Check for misspelled words
+    - revive        # Fast, configurable, extensible linter
+    - gosec         # Security issues
+    - goconst       # Repeated strings that could be constants
+    - gocyclo       # Cyclomatic complexity
+    - dupl          # Code duplication
+    - bodyclose     # Check HTTP response body is closed
+    - noctx         # Check for sending HTTP request without context
+    - errname       # Check error naming conventions
+    - exportloopref # Check for pointers to loop variables
+    - gocritic      # Comprehensive linter
+    - whitespace    # Whitespace issues
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  govet:
+    enable-all: true
+    disable:
+      - shadow # Too many false positives
+
+  gocyclo:
+    min-complexity: 15
+
+  dupl:
+    threshold: 100
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: unused-parameter
+        disabled: false
+      - name: unreachable-code
+        disabled: false
+
+  gosec:
+    excludes:
+      - G104 # Audit errors not checked (too noisy)
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+
+    # Exclude main.go from certain checks
+    - path: main\.go
+      linters:
+        - gocyclo
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true

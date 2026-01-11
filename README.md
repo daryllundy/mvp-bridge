@@ -1,5 +1,10 @@
 # MVPBridge
 
+[![CI](https://github.com/yourusername/mvpbridge/workflows/CI/badge.svg)](https://github.com/yourusername/mvpbridge/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/mvpbridge)](https://goreportcard.com/report/github.com/yourusername/mvpbridge)
+[![codecov](https://codecov.io/gh/yourusername/mvpbridge/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/mvpbridge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Bridge your MVP to production.**
 
 MVPBridge is a single-binary CLI tool that inspects, normalizes, and deploys your frontend projects. No hosted dependencies. No daemons. No accounts.

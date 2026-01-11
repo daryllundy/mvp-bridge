@@ -37,11 +37,25 @@ test-deploy:
 
 # Lint the code
 lint:
+	@which golangci-lint > /dev/null || (echo "golangci-lint not installed. Run: brew install golangci-lint" && exit 1)
 	golangci-lint run
 
 # Format the code
 fmt:
 	go fmt ./...
+
+# Check formatting
+fmt-check:
+	@test -z $$(gofmt -l .) || (echo "Code not formatted. Run 'make fmt'" && exit 1)
+
+# Run CI checks locally
+ci: fmt-check lint test
+	@echo "✅ All CI checks passed"
+
+# Security scan
+security:
+	@which gosec > /dev/null || (echo "gosec not installed. Run: go install github.com/securego/gosec/v2/cmd/gosec@latest" && exit 1)
+	gosec ./...
 
 # Run the binary (for quick testing)
 run:
