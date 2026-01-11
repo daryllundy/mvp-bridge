@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,37 +15,37 @@ import (
 const doAPIBase = "https://api.digitalocean.com/v2"
 
 type DODeployer struct {
-	Token    string
-	AppName  string
-	RepoURL  string
-	Branch   string
-	client   *http.Client
+	Token   string
+	AppName string
+	RepoURL string
+	Branch  string
+	client  *http.Client
 }
 
 type DOAppSpec struct {
-	Name     string       `json:"name"`
-	Region   string       `json:"region,omitempty"`
-	Services []DOService  `json:"services,omitempty"`
+	Name        string         `json:"name"`
+	Region      string         `json:"region,omitempty"`
+	Services    []DOService    `json:"services,omitempty"`
 	StaticSites []DOStaticSite `json:"static_sites,omitempty"`
 }
 
 type DOService struct {
-	Name             string       `json:"name"`
-	GitHub           *DOGitHub    `json:"github,omitempty"`
-	Dockerfile       string       `json:"dockerfile_path,omitempty"`
-	SourceDir        string       `json:"source_dir,omitempty"`
-	HTTPPort         int          `json:"http_port,omitempty"`
-	InstanceCount    int          `json:"instance_count,omitempty"`
-	InstanceSizeSlug string       `json:"instance_size_slug,omitempty"`
-	Envs             []DOEnvVar   `json:"envs,omitempty"`
+	Name             string     `json:"name"`
+	GitHub           *DOGitHub  `json:"github,omitempty"`
+	Dockerfile       string     `json:"dockerfile_path,omitempty"`
+	SourceDir        string     `json:"source_dir,omitempty"`
+	HTTPPort         int        `json:"http_port,omitempty"`
+	InstanceCount    int        `json:"instance_count,omitempty"`
+	InstanceSizeSlug string     `json:"instance_size_slug,omitempty"`
+	Envs             []DOEnvVar `json:"envs,omitempty"`
 }
 
 type DOStaticSite struct {
-	Name          string     `json:"name"`
-	GitHub        *DOGitHub  `json:"github,omitempty"`
-	BuildCommand  string     `json:"build_command,omitempty"`
-	OutputDir     string     `json:"output_dir,omitempty"`
-	Envs          []DOEnvVar `json:"envs,omitempty"`
+	Name         string     `json:"name"`
+	GitHub       *DOGitHub  `json:"github,omitempty"`
+	BuildCommand string     `json:"build_command,omitempty"`
+	OutputDir    string     `json:"output_dir,omitempty"`
+	Envs         []DOEnvVar `json:"envs,omitempty"`
 }
 
 type DOGitHub struct {
@@ -61,9 +62,9 @@ type DOEnvVar struct {
 
 type DOAppResponse struct {
 	App struct {
-		ID              string `json:"id"`
-		DefaultIngress  string `json:"default_ingress"`
-		LiveURL         string `json:"live_url"`
+		ID               string `json:"id"`
+		DefaultIngress   string `json:"default_ingress"`
+		LiveURL          string `json:"live_url"`
 		ActiveDeployment struct {
 			ID    string `json:"id"`
 			Phase string `json:"phase"`
@@ -168,7 +169,7 @@ func (d *DODeployer) createApp(spec *DOAppSpec) (*DOAppResponse, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", doAPIBase+"/apps", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", doAPIBase+"/apps", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +184,7 @@ func (d *DODeployer) updateApp(appID string, spec *DOAppSpec) (*DOAppResponse, e
 		return nil, err
 	}
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/apps/%s", doAPIBase, appID), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(context.Background(), "PUT", fmt.Sprintf("%s/apps/%s", doAPIBase, appID), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +194,7 @@ func (d *DODeployer) updateApp(appID string, spec *DOAppSpec) (*DOAppResponse, e
 
 func (d *DODeployer) getApp() (*DOAppResponse, error) {
 	// List all apps and find by name
-	req, err := http.NewRequest("GET", doAPIBase+"/apps", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", doAPIBase+"/apps", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +236,7 @@ func (d *DODeployer) getApp() (*DOAppResponse, error) {
 }
 
 func (d *DODeployer) getAppByID(id string) (*DOAppResponse, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s", doAPIBase, id), nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", fmt.Sprintf("%s/apps/%s", doAPIBase, id), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +254,10 @@ func (d *DODeployer) doRequest(req *http.Request) (*DOAppResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
@@ -295,7 +299,7 @@ func (d *DODeployer) WaitForDeployment(appID string, timeout time.Duration) erro
 // GetLogs fetches deployment logs (simplified)
 func (d *DODeployer) GetLogs(appID, deploymentID string) (string, error) {
 	url := fmt.Sprintf("%s/apps/%s/deployments/%s/logs", doAPIBase, appID, deploymentID)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 	if err != nil {
 		return "", err
 	}

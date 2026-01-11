@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,13 +25,13 @@ type AWSDeployer struct {
 }
 
 type AmplifyApp struct {
-	Name          string                   `json:"name"`
-	Repository    string                   `json:"repository"`
-	Platform      string                   `json:"platform"` // WEB
-	IAMServiceRole string                  `json:"iamServiceRole,omitempty"`
+	Name                 string            `json:"name"`
+	Repository           string            `json:"repository"`
+	Platform             string            `json:"platform"` // WEB
+	IAMServiceRole       string            `json:"iamServiceRole,omitempty"`
 	EnvironmentVariables map[string]string `json:"environmentVariables,omitempty"`
-	BuildSpec     string                   `json:"buildSpec,omitempty"`
-	CustomRules   []AmplifyRule            `json:"customRules,omitempty"`
+	BuildSpec            string            `json:"buildSpec,omitempty"`
+	CustomRules          []AmplifyRule     `json:"customRules,omitempty"`
 }
 
 type AmplifyRule struct {
@@ -95,7 +96,7 @@ func (d *AWSDeployer) Deploy(isStatic bool, envVars map[string]string, buildComm
 
 	if existing != nil {
 		// Update existing app
-		return d.updateApp(existing.App.AppID, envVars, buildCommand, outputDir, isStatic)
+		return d.updateApp(existing.App.AppID, envVars, buildCommand, outputDir)
 	}
 
 	// Create new app
@@ -146,7 +147,7 @@ func (d *AWSDeployer) createApp(envVars map[string]string, buildCommand, outputD
 	}
 
 	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps"
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +165,7 @@ func (d *AWSDeployer) createApp(envVars map[string]string, buildCommand, outputD
 	return result, nil
 }
 
-func (d *AWSDeployer) updateApp(appID string, envVars map[string]string, buildCommand, outputDir string, isStatic bool) (*AmplifyAppResponse, error) {
+func (d *AWSDeployer) updateApp(appID string, envVars map[string]string, buildCommand, outputDir string) (*AmplifyAppResponse, error) {
 	body := map[string]interface{}{
 		"environmentVariables": envVars,
 		"buildSpec":            d.buildSpec(buildCommand, outputDir),
@@ -176,7 +177,7 @@ func (d *AWSDeployer) updateApp(appID string, envVars map[string]string, buildCo
 	}
 
 	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps/" + appID
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +199,7 @@ func (d *AWSDeployer) createBranch(appID string, envVars map[string]string) erro
 	}
 
 	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps/" + appID + "/branches"
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -213,7 +214,10 @@ func (d *AWSDeployer) createBranch(appID string, envVars map[string]string) erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("API error %d (failed to read body: %w)", resp.StatusCode, err)
+		}
 		return fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -222,7 +226,7 @@ func (d *AWSDeployer) createBranch(appID string, envVars map[string]string) erro
 
 func (d *AWSDeployer) getApp() (*AmplifyAppResponse, error) {
 	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps"
-	req, err := http.NewRequest("GET", endpoint, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +267,7 @@ func (d *AWSDeployer) getApp() (*AmplifyAppResponse, error) {
 
 func (d *AWSDeployer) getAppByID(appID string) (*AmplifyAppResponse, error) {
 	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps/" + appID
-	req, err := http.NewRequest("GET", endpoint, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +285,10 @@ func (d *AWSDeployer) doRequest(req *http.Request) (*AmplifyAppResponse, error) 
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))

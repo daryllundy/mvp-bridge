@@ -573,7 +573,7 @@ func TestGitHubTokenRequired(t *testing.T) {
 
 	// Create a mock server that will never be called
 	// because we should fail before making requests
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		t.Error("Should not make API calls without GitHub token")
 	}))
 	defer server.Close()

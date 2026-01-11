@@ -4,7 +4,22 @@
       "Bash(./mvpbridge inspect:*)",
       "Bash(go test:*)",
       "Bash(go build:*)",
-      "Bash(./mvpbridge --version:*)"
+      "Bash(./mvpbridge --version:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(git commit:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(git tag:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh release:*)",
+      "Bash(gh run watch:*)",
+      "Bash(docker pull:*)",
+      "Bash(docker run:*)",
+      "Bash(find:*)",
+      "Bash(golangci-lint run:*)"
     ]
   }
 }

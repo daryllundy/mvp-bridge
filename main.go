@@ -6,11 +6,12 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"mvpbridge/internal/config"
 	"mvpbridge/internal/deploy"
 	"mvpbridge/internal/detect"
 	"mvpbridge/internal/normalize"
+
+	"github.com/spf13/cobra"
 )
 
 var version = "0.1.0"
@@ -44,7 +45,7 @@ func initCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize MVPBridge in current repo",
 		Long:  `Sets up MVPBridge configuration by detecting your project structure and creating .mvpbridge/config.yaml`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return runInit(target, framework)
 		},
 	}
@@ -62,8 +63,8 @@ func inspectCmd() *cobra.Command {
 		Use:   "inspect",
 		Short: "Analyze repo and report deployment readiness",
 		Long:  `Performs read-only analysis of your repository to identify what needs to be fixed before deployment.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInspect(verbose)
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runInspect()
 		},
 	}
 
@@ -80,7 +81,7 @@ func normalizeCmd() *cobra.Command {
 		Use:   "normalize",
 		Short: "Apply fixes to make repo deployable",
 		Long:  `Applies atomic, reversible changes to prepare your repository for deployment.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return runNormalize(dryRun, yes)
 		},
 	}
@@ -97,7 +98,7 @@ func deployCmd() *cobra.Command {
 		Short: "Deploy to target platform",
 		Long:  `Deploys your application to the specified platform (do for DigitalOcean, aws for AWS).`,
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			return runDeploy(args[0])
 		},
 	}
@@ -156,7 +157,7 @@ func runInit(target, framework string) error {
 	return nil
 }
 
-func runInspect(verbose bool) error {
+func runInspect() error {
 	// Run detection
 	d, err := detect.DetectAll(".")
 	if err != nil {
@@ -239,9 +240,13 @@ func runNormalize(dryRun, yes bool) error {
 		fmt.Println("This will create git commits for each normalization step.")
 		fmt.Print("Continue? [y/N]: ")
 		var response string
-		fmt.Scanln(&response)
+		_, err := fmt.Scanln(&response)
+		if err != nil {
+			// Treat scan error as "no"
+			return fmt.Errorf("canceled by user")
+		}
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
-			return fmt.Errorf("cancelled by user")
+			return fmt.Errorf("canceled by user")
 		}
 	}
 
@@ -492,7 +497,10 @@ func deployAWS(cfg *config.Config) error {
 	fmt.Println("[2/4] Creating app spec... ✓")
 
 	// Get build config from detection
-	d, _ := detect.DetectAll(".")
+	d, err := detect.DetectAll(".")
+	if err != nil {
+		return fmt.Errorf("detecting project: %w", err)
+	}
 	buildCommand := d.BuildCommand
 	if buildCommand == "" {
 		buildCommand = "npm run build"

@@ -302,9 +302,9 @@ func TestDODeployWithMockServer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockResponse := DOAppResponse{
 				App: struct {
-					ID              string `json:"id"`
-					DefaultIngress  string `json:"default_ingress"`
-					LiveURL         string `json:"live_url"`
+					ID               string `json:"id"`
+					DefaultIngress   string `json:"default_ingress"`
+					LiveURL          string `json:"live_url"`
 					ActiveDeployment struct {
 						ID    string `json:"id"`
 						Phase string `json:"phase"`

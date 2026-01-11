@@ -332,10 +332,8 @@ func TestValidate(t *testing.T) {
 				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("Expected error message containing %q, got %q", tt.errMsg, err.Error())
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+			} else if err != nil {
+				t.Errorf("Unexpected error: %v", err)
 			}
 		})
 	}

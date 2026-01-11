@@ -35,6 +35,7 @@ linters-settings:
     enable-all: true
     disable:
       - shadow # Too many false positives
+      - fieldalignment # Too strict for this project
 
   gocyclo:
     min-complexity: 15

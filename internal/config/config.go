@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+
 	"mvpbridge/internal/detect"
 )
 
@@ -18,7 +19,7 @@ type Config struct {
 	Version   int    `yaml:"version"`
 	Framework string `yaml:"framework"`
 	Target    string `yaml:"target"`
-	
+
 	// Detected values (populated by inspect)
 	Detected struct {
 		PackageManager string `yaml:"package_manager,omitempty"`
@@ -27,7 +28,7 @@ type Config struct {
 		NodeVersion    string `yaml:"node_version,omitempty"`
 		OutputType     string `yaml:"output_type,omitempty"`
 	} `yaml:"detected,omitempty"`
-	
+
 	// Deployment settings
 	Deploy struct {
 		AppName string `yaml:"app_name,omitempty"`
@@ -38,7 +39,7 @@ type Config struct {
 // Load reads config from .mvpbridge/config.yaml
 func Load(root string) (*Config, error) {
 	path := filepath.Join(root, ConfigDir, ConfigFile)
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -68,7 +69,7 @@ func (c *Config) Save(root string) error {
 	}
 
 	path := filepath.Join(dir, ConfigFile)
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // NewFromDetection creates a config from detection results

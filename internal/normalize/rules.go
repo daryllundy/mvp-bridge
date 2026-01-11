@@ -18,10 +18,10 @@ type Rule struct {
 }
 
 type Normalizer struct {
-	Root     string
-	DryRun   bool
+	Root      string
+	DryRun    bool
 	Framework detect.Framework
-	Rules    []Rule
+	Rules     []Rule
 }
 
 func New(root string, fw detect.Framework, dryRun bool) *Normalizer {
@@ -90,7 +90,7 @@ func universalRules() []Rule {
 				if dryRun {
 					return nil
 				}
-				return os.WriteFile(filepath.Join(root, ".nvmrc"), []byte("20\n"), 0644)
+				return os.WriteFile(filepath.Join(root, ".nvmrc"), []byte("20\n"), 0600)
 			},
 		},
 		{
@@ -109,9 +109,7 @@ func universalRules() []Rule {
 		{
 			Name:        "Update .gitignore",
 			Description: "Update .gitignore with standard entries",
-			Check: func(root string) bool {
-				return gitignoreComplete(root)
-			},
+			Check:       gitignoreComplete,
 			Apply: func(root string, dryRun bool) error {
 				if dryRun {
 					return nil
@@ -149,7 +147,7 @@ func viteRules() []Rule {
 				if dryRun {
 					return nil
 				}
-				return os.WriteFile(filepath.Join(root, "Dockerfile"), []byte(viteDockerfile), 0644)
+				return os.WriteFile(filepath.Join(root, "Dockerfile"), []byte(viteDockerfile), 0600)
 			},
 		},
 		{
@@ -162,7 +160,7 @@ func viteRules() []Rule {
 				if dryRun {
 					return nil
 				}
-				return os.WriteFile(filepath.Join(root, "nginx.conf"), []byte(nginxConfig), 0644)
+				return os.WriteFile(filepath.Join(root, "nginx.conf"), []byte(nginxConfig), 0600)
 			},
 		},
 	}
@@ -185,9 +183,9 @@ func nextjsRules() []Rule {
 				// Detect if static or SSR
 				outputType := detect.DetectOutputType(root, detect.NextJS)
 				if outputType == detect.Static {
-					return os.WriteFile(filepath.Join(root, "Dockerfile"), []byte(nextStaticDockerfile), 0644)
+					return os.WriteFile(filepath.Join(root, "Dockerfile"), []byte(nextStaticDockerfile), 0600)
 				}
-				return os.WriteFile(filepath.Join(root, "Dockerfile"), []byte(nextSSRDockerfile), 0644)
+				return os.WriteFile(filepath.Join(root, "Dockerfile"), []byte(nextSSRDockerfile), 0600)
 			},
 		},
 	}
@@ -209,6 +207,7 @@ func gitCommit(root, message string) error {
 	}
 
 	// Commit
+	// #nosec G204 - message is hardcoded in rules, not user input
 	commit := exec.Command("git", "commit", "-m", fmt.Sprintf("[mvpbridge] %s", message))
 	commit.Dir = root
 	return commit.Run()
@@ -233,11 +232,11 @@ func createEnvExample(root string) error {
 				example = append(example, key+"=")
 			}
 		}
-		return os.WriteFile(examplePath, []byte(strings.Join(example, "\n")+"\n"), 0644)
+		return os.WriteFile(examplePath, []byte(strings.Join(example, "\n")+"\n"), 0600)
 	}
 
 	// Default template
-	return os.WriteFile(examplePath, []byte("# Environment variables\n# Copy to .env and fill in values\n"), 0644)
+	return os.WriteFile(examplePath, []byte("# Environment variables\n# Copy to .env and fill in values\n"), 0600)
 }
 
 func gitignoreComplete(root string) bool {
@@ -259,7 +258,7 @@ func gitignoreComplete(root string) bool {
 
 func updateGitignore(root string) error {
 	path := filepath.Join(root, ".gitignore")
-	
+
 	existing := ""
 	if data, err := os.ReadFile(path); err == nil {
 		existing = string(data)
@@ -294,7 +293,7 @@ func updateGitignore(root string) error {
 	content += "\n# Added by mvpbridge\n"
 	content += strings.Join(toAdd, "\n") + "\n"
 
-	return os.WriteFile(path, []byte(content), 0644)
+	return os.WriteFile(path, []byte(content), 0600)
 }
 
 func createGitHubWorkflow(root string) error {
@@ -302,7 +301,7 @@ func createGitHubWorkflow(root string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "deploy.yml"), []byte(githubWorkflow), 0644)
+	return os.WriteFile(filepath.Join(dir, "deploy.yml"), []byte(githubWorkflow), 0600)
 }
 
 // Templates
