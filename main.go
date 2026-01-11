@@ -57,9 +57,7 @@ func initCmd() *cobra.Command {
 }
 
 func inspectCmd() *cobra.Command {
-	var verbose bool
-
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "inspect",
 		Short: "Analyze repo and report deployment readiness",
 		Long:  `Performs read-only analysis of your repository to identify what needs to be fixed before deployment.`,
@@ -67,10 +65,6 @@ func inspectCmd() *cobra.Command {
 			return runInspect()
 		},
 	}
-
-	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show detailed output")
-
-	return cmd
 }
 
 func normalizeCmd() *cobra.Command {
