@@ -278,6 +278,6 @@ To upgrade to full AWS SDK:
 ## Support
 
 For issues specific to:
-- **MVPBridge:** https://github.com/yourusername/mvpbridge/issues
+- **MVPBridge:** https://github.com/daryllundy/mvp-bridge/issues
 - **AWS Amplify:** https://docs.aws.amazon.com/amplify/
 - **AWS Support:** https://console.aws.amazon.com/support/

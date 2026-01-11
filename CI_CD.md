@@ -98,10 +98,10 @@ GOOS=windows GOARCH=amd64  # Windows x86-64
   3. Tag with version and `latest`
 
 **Docker Tags:**
-- `ghcr.io/username/mvpbridge:latest`
-- `ghcr.io/username/mvpbridge:0.1.0`
-- `ghcr.io/username/mvpbridge:0.1`
-- `ghcr.io/username/mvpbridge:0`
+- `ghcr.io/daryllundy/mvp-bridge:latest`
+- `ghcr.io/daryllundy/mvp-bridge:0.1.0`
+- `ghcr.io/daryllundy/mvp-bridge:0.1`
+- `ghcr.io/daryllundy/mvp-bridge:0`
 
 ## Configuration Files
 
@@ -253,7 +253,7 @@ git push origin v0.1.0
 
 ```bash
 # Download and test (example for macOS)
-curl -L https://github.com/user/mvpbridge/releases/download/v0.1.0/mvpbridge-darwin-arm64 -o mvpbridge
+curl -L https://github.com/daryllundy/mvp-bridge/releases/download/v0.1.0/mvpbridge-darwin-arm64 -o mvpbridge
 chmod +x mvpbridge
 ./mvpbridge --version
 ```
@@ -264,14 +264,14 @@ chmod +x mvpbridge
 
 ```bash
 # Pull latest image
-docker pull ghcr.io/username/mvpbridge:latest
+docker pull ghcr.io/daryllundy/mvp-bridge:latest
 
 # Run command
-docker run --rm ghcr.io/username/mvpbridge:latest --version
+docker run --rm ghcr.io/daryllundy/mvp-bridge:latest --version
 
 # Interactive use
 docker run -it --rm -v $(pwd):/workspace -w /workspace \
-  ghcr.io/username/mvpbridge:latest init
+  ghcr.io/daryllundy/mvp-bridge:latest init
 ```
 
 ### Build Locally
@@ -431,7 +431,7 @@ GOOS=darwin GOARCH=arm64 go build -o mvpbridge-darwin-arm64 ./main.go
 
 View workflow runs:
 ```
-https://github.com/username/mvpbridge/actions
+https://github.com/daryllundy/mvp-bridge/actions
 ```
 
 ### Status Badges
@@ -439,8 +439,8 @@ https://github.com/username/mvpbridge/actions
 Add to README.md:
 
 ```markdown
-[![CI](https://github.com/username/mvpbridge/workflows/CI/badge.svg)](https://github.com/username/mvpbridge/actions)
-[![codecov](https://codecov.io/gh/username/mvpbridge/branch/main/graph/badge.svg)](https://codecov.io/gh/username/mvpbridge)
+[![CI](https://github.com/daryllundy/mvp-bridge/workflows/CI/badge.svg)](https://github.com/daryllundy/mvp-bridge/actions)
+[![codecov](https://codecov.io/gh/daryllundy/mvp-bridge/branch/main/graph/badge.svg)](https://codecov.io/gh/daryllundy/mvp-bridge)
 ```
 
 ## Security
