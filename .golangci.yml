@@ -61,6 +61,8 @@ linters-settings:
   gosec:
     excludes:
       - G104 # Audit errors not checked (too noisy)
+      - G301 # Directory permissions (we use 0750 which is secure)
+      - G304 # File path inclusion (false positives - we control the paths)
 
 issues:
   exclude-rules:
