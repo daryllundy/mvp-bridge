@@ -1,8 +1,8 @@
 # MVPBridge
 
-[![CI](https://github.com/yourusername/mvpbridge/workflows/CI/badge.svg)](https://github.com/yourusername/mvpbridge/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/mvpbridge)](https://goreportcard.com/report/github.com/yourusername/mvpbridge)
-[![codecov](https://codecov.io/gh/yourusername/mvpbridge/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/mvpbridge)
+[![CI](https://github.com/daryllundy/mvp-bridge/workflows/CI/badge.svg)](https://github.com/daryllundy/mvp-bridge/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/daryllundy/mvp-bridge)](https://goreportcard.com/report/github.com/daryllundy/mvp-bridge)
+[![codecov](https://codecov.io/gh/daryllundy/mvp-bridge/branch/main/graph/badge.svg)](https://codecov.io/gh/daryllundy/mvp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Bridge your MVP to production.**
@@ -18,7 +18,7 @@ MVPBridge makes it work everywhere else.
 
 ```bash
 # Install (coming soon: brew, go install, releases)
-go install github.com/yourusername/mvpbridge/cmd/mvpbridge@latest
+go install github.com/daryllundy/mvp-bridge/cmd/mvpbridge@latest
 
 # In your project directory
 mvpbridge init
@@ -64,7 +64,7 @@ MVPBridge is deliberately simple:
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/mvpbridge
+git clone https://github.com/daryllundy/mvp-bridge
 cd mvpbridge
 go build -o mvpbridge ./main.go
 ```
@@ -72,12 +72,12 @@ go build -o mvpbridge ./main.go
 ### Go Install
 
 ```bash
-go install github.com/yourusername/mvpbridge@latest
+go install github.com/daryllundy/mvp-bridge@latest
 ```
 
 ### Releases
 
-Download from [GitHub Releases](https://github.com/yourusername/mvpbridge/releases).
+Download from [GitHub Releases](https://github.com/daryllundy/mvp-bridge/releases).
 
 ## Usage
 
