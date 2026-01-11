@@ -59,7 +59,7 @@ func Load(root string) (*Config, error) {
 // Save writes config to .mvpbridge/config.yaml
 func (c *Config) Save(root string) error {
 	dir := filepath.Join(root, ConfigDir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 
