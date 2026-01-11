@@ -73,11 +73,18 @@ issues:
         - dupl
         - gosec
         - goconst
+        - revive
 
     # Exclude main.go from certain checks
     - path: main\.go
       linters:
         - gocyclo
+
+    # Exclude stuttering warnings for detect package (public API)
+    - path: internal/detect/detect\.go
+      text: "stutters"
+      linters:
+        - revive
 
   max-issues-per-linter: 0
   max-same-issues: 0
