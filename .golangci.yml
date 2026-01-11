@@ -22,7 +22,6 @@ linters:
     - bodyclose     # Check HTTP response body is closed
     - noctx         # Check for sending HTTP request without context
     - errname       # Check error naming conventions
-    - exportloopref # Check for pointers to loop variables
     - gocritic      # Comprehensive linter
     - whitespace    # Whitespace issues
 
