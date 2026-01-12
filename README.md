@@ -1,6 +1,6 @@
 # MVPBridge
 
-[![CI](https://github.com/daryllundy/mvp-bridge/workflows/CI/badge.svg)](https://github.com/daryllundy/mvp-bridge/actions)
+[![CI](https://github.com/daryllundy/mvp-bridge/workflows/CI/badge.svg?branch=main)](https://github.com/daryllundy/mvp-bridge/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/daryllundy/mvp-bridge)](https://goreportcard.com/report/github.com/daryllundy/mvp-bridge)
 [![codecov](https://codecov.io/gh/daryllundy/mvp-bridge/branch/main/graph/badge.svg)](https://codecov.io/gh/daryllundy/mvp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
