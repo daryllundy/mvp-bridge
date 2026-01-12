@@ -19,7 +19,12 @@
       "Bash(docker pull:*)",
       "Bash(docker run:*)",
       "Bash(find:*)",
-      "Bash(golangci-lint run:*)"
+      "Bash(golangci-lint run:*)",
+      "Bash(go fmt:*)",
+      "Bash(git restore:*)",
+      "Bash(git for-each-ref:*)",
+      "Bash(git branch:*)",
+      "Bash(git pull:*)"
     ]
   }
 }
