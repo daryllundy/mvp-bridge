@@ -1,3 +1,5 @@
+// Package config provides configuration file management for MVPBridge.
+// It handles loading and saving project configuration in .mvpbridge/config.yaml.
 package config
 
 import (
@@ -11,10 +13,13 @@ import (
 )
 
 const (
-	ConfigDir  = ".mvpbridge"
+	// ConfigDir is the directory name for MVPBridge configuration
+	ConfigDir = ".mvpbridge"
+	// ConfigFile is the name of the configuration file
 	ConfigFile = "config.yaml"
 )
 
+// Config represents the MVPBridge project configuration
 type Config struct {
 	Version   int    `yaml:"version"`
 	Framework string `yaml:"framework"`

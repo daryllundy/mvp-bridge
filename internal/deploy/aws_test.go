@@ -66,14 +66,14 @@ func TestNewAWSDeployer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variables
 			if tt.accessKey != "" {
-				os.Setenv("AWS_ACCESS_KEY_ID", tt.accessKey)
+				_ = os.Setenv("AWS_ACCESS_KEY_ID", tt.accessKey)
 			} else {
-				os.Unsetenv("AWS_ACCESS_KEY_ID")
+				_ = os.Unsetenv("AWS_ACCESS_KEY_ID")
 			}
 			if tt.secretKey != "" {
-				os.Setenv("AWS_SECRET_ACCESS_KEY", tt.secretKey)
+				_ = os.Setenv("AWS_SECRET_ACCESS_KEY", tt.secretKey)
 			} else {
-				os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+				_ = os.Unsetenv("AWS_SECRET_ACCESS_KEY")
 			}
 
 			deployer, err := NewAWSDeployer(tt.appName, tt.repoURL, tt.branch, tt.region)
@@ -111,8 +111,8 @@ func TestNewAWSDeployer(t *testing.T) {
 	}
 
 	// Clean up
-	os.Unsetenv("AWS_ACCESS_KEY_ID")
-	os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+	_ = os.Unsetenv("AWS_ACCESS_KEY_ID")
+	_ = os.Unsetenv("AWS_SECRET_ACCESS_KEY")
 }
 
 func TestBuildSpec(t *testing.T) {
@@ -169,13 +169,13 @@ func TestBuildSpec(t *testing.T) {
 
 func TestDeployWithMockServer(t *testing.T) {
 	// Set up environment
-	os.Setenv("AWS_ACCESS_KEY_ID", "test-key")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret")
-	os.Setenv("GITHUB_TOKEN", "test-token")
+	_ = os.Setenv("AWS_ACCESS_KEY_ID", "test-key")
+	_ = os.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret")
+	_ = os.Setenv("GITHUB_TOKEN", "test-token")
 	defer func() {
-		os.Unsetenv("AWS_ACCESS_KEY_ID")
-		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
-		os.Unsetenv("GITHUB_TOKEN")
+		_ = os.Unsetenv("AWS_ACCESS_KEY_ID")
+		_ = os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+		_ = os.Unsetenv("GITHUB_TOKEN")
 	}()
 
 	tests := []struct {
@@ -246,7 +246,7 @@ func TestDeployWithMockServer(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Handle different endpoints
 				switch {
-				case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/apps"):
+				case r.Method == httpMethodGet && strings.HasSuffix(r.URL.Path, "/apps"):
 					// List apps - return empty or existing
 					if tt.existingApp {
 						response := struct {
@@ -271,35 +271,35 @@ func TestDeployWithMockServer(t *testing.T) {
 								},
 							},
 						}
-						json.NewEncoder(w).Encode(response)
+						_ = json.NewEncoder(w).Encode(response)
 					} else {
-						json.NewEncoder(w).Encode(struct {
+						_ = json.NewEncoder(w).Encode(struct {
 							Apps []interface{} `json:"apps"`
 						}{Apps: []interface{}{}})
 					}
 
-				case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/apps"):
+				case r.Method == httpMethodPost && strings.HasSuffix(r.URL.Path, "/apps"):
 					// Create app
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(tt.mockResponse)
+					_ = json.NewEncoder(w).Encode(tt.mockResponse)
 
-				case r.Method == "POST" && strings.Contains(r.URL.Path, "/branches"):
+				case r.Method == httpMethodPost && strings.Contains(r.URL.Path, "/branches"):
 					// Create branch
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(AmplifyBranchResponse{
+					_ = json.NewEncoder(w).Encode(AmplifyBranchResponse{
 						Branch: struct {
 							BranchName string `json:"branchName"`
 						}{BranchName: "main"},
 					})
 
-				case r.Method == "GET" && strings.Contains(r.URL.Path, "/apps/"):
+				case r.Method == httpMethodGet && strings.Contains(r.URL.Path, "/apps/"):
 					// Get app details
-					json.NewEncoder(w).Encode(tt.mockResponse)
+					_ = json.NewEncoder(w).Encode(tt.mockResponse)
 
-				case r.Method == "POST" && strings.Contains(r.URL.Path, "/apps/") && !strings.Contains(r.URL.Path, "/branches"):
+				case r.Method == httpMethodPost && strings.Contains(r.URL.Path, "/apps/") && !strings.Contains(r.URL.Path, "/branches"):
 					// Update app
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(tt.mockResponse)
+					_ = json.NewEncoder(w).Encode(tt.mockResponse)
 
 				default:
 					http.Error(w, "Not found", http.StatusNotFound)
@@ -516,11 +516,11 @@ func TestRepoURLParsing(t *testing.T) {
 }
 
 func TestAWSDeployerFieldValidation(t *testing.T) {
-	os.Setenv("AWS_ACCESS_KEY_ID", "test-key")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret")
+	_ = os.Setenv("AWS_ACCESS_KEY_ID", "test-key")
+	_ = os.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret")
 	defer func() {
-		os.Unsetenv("AWS_ACCESS_KEY_ID")
-		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+		_ = os.Unsetenv("AWS_ACCESS_KEY_ID")
+		_ = os.Unsetenv("AWS_SECRET_ACCESS_KEY")
 	}()
 
 	deployer, err := NewAWSDeployer("my-app", "https://github.com/user/repo", "main", "us-west-2")
@@ -558,12 +558,12 @@ func TestAWSDeployerFieldValidation(t *testing.T) {
 }
 
 func TestGitHubTokenRequired(t *testing.T) {
-	os.Setenv("AWS_ACCESS_KEY_ID", "test-key")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret")
-	os.Unsetenv("GITHUB_TOKEN")
+	_ = os.Setenv("AWS_ACCESS_KEY_ID", "test-key")
+	_ = os.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret")
+	_ = os.Unsetenv("GITHUB_TOKEN")
 	defer func() {
-		os.Unsetenv("AWS_ACCESS_KEY_ID")
-		os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+		_ = os.Unsetenv("AWS_ACCESS_KEY_ID")
+		_ = os.Unsetenv("AWS_SECRET_ACCESS_KEY")
 	}()
 
 	deployer, err := NewAWSDeployer("test-app", "https://github.com/user/repo", "main", "us-east-1")

@@ -1,3 +1,5 @@
+// Package deploy provides cloud platform deployment implementations for
+// MVPBridge. It supports DigitalOcean App Platform and AWS Amplify.
 package deploy
 
 import (
@@ -14,6 +16,7 @@ import (
 
 const doAPIBase = "https://api.digitalocean.com/v2"
 
+// DODeployer handles deployments to DigitalOcean App Platform
 type DODeployer struct {
 	Token   string
 	AppName string
@@ -22,6 +25,7 @@ type DODeployer struct {
 	client  *http.Client
 }
 
+// DOAppSpec represents the DigitalOcean App Platform app specification
 type DOAppSpec struct {
 	Name        string         `json:"name"`
 	Region      string         `json:"region,omitempty"`
@@ -29,6 +33,7 @@ type DOAppSpec struct {
 	StaticSites []DOStaticSite `json:"static_sites,omitempty"`
 }
 
+// DOService represents a DigitalOcean service component (for SSR apps)
 type DOService struct {
 	Name             string     `json:"name"`
 	GitHub           *DOGitHub  `json:"github,omitempty"`
@@ -40,6 +45,7 @@ type DOService struct {
 	Envs             []DOEnvVar `json:"envs,omitempty"`
 }
 
+// DOStaticSite represents a DigitalOcean static site component
 type DOStaticSite struct {
 	Name         string     `json:"name"`
 	GitHub       *DOGitHub  `json:"github,omitempty"`
@@ -48,18 +54,21 @@ type DOStaticSite struct {
 	Envs         []DOEnvVar `json:"envs,omitempty"`
 }
 
+// DOGitHub represents GitHub repository configuration for DigitalOcean
 type DOGitHub struct {
 	Repo         string `json:"repo"`
 	Branch       string `json:"branch"`
 	DeployOnPush bool   `json:"deploy_on_push"`
 }
 
+// DOEnvVar represents an environment variable in DigitalOcean App Platform
 type DOEnvVar struct {
 	Key   string `json:"key"`
 	Value string `json:"value,omitempty"`
 	Type  string `json:"type,omitempty"` // GENERAL or SECRET
 }
 
+// DOAppResponse represents the API response when creating or updating an app
 type DOAppResponse struct {
 	App struct {
 		ID               string `json:"id"`
@@ -72,6 +81,7 @@ type DOAppResponse struct {
 	} `json:"app"`
 }
 
+// NewDODeployer creates a new DigitalOcean deployer instance
 func NewDODeployer(appName, repoURL, branch string) (*DODeployer, error) {
 	token := os.Getenv("DIGITALOCEAN_TOKEN")
 	if token == "" {
@@ -206,7 +216,7 @@ func (d *DODeployer) getApp() (*DOAppResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API error: %s", resp.Status)
@@ -252,7 +262,7 @@ func (d *DODeployer) doRequest(req *http.Request) (*DOAppResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -310,7 +320,7 @@ func (d *DODeployer) GetLogs(appID, deploymentID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
