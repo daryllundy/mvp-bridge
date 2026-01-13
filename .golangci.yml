@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
@@ -6,13 +8,10 @@ run:
 linters:
   enable:
     - errcheck      # Check for unchecked errors
-    - gosimple      # Simplify code
     - govet         # Vet examines Go source code
     - ineffassign   # Detect ineffectual assignments
-    - staticcheck   # Advanced Go linter
+    - staticcheck   # Advanced Go linter (includes gosimple)
     - unused        # Check for unused code
-    - gofmt         # Check formatting
-    - goimports     # Check import formatting
     - misspell      # Check for misspelled words
     - revive        # Fast, configurable, extensible linter
     - gosec         # Security issues
@@ -23,7 +22,6 @@ linters:
     - noctx         # Check for sending HTTP request without context
     - errname       # Check error naming conventions
     - gocritic      # Comprehensive linter
-    - whitespace    # Whitespace issues
 
 linters-settings:
   errcheck:

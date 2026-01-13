@@ -14,6 +14,7 @@ import (
 
 const awsAmplifyAPIBase = "https://amplify.%s.amazonaws.com"
 
+// AWSDeployer handles deployments to AWS Amplify
 type AWSDeployer struct {
 	AccessKey string
 	SecretKey string
@@ -24,6 +25,7 @@ type AWSDeployer struct {
 	client    *http.Client
 }
 
+// AmplifyApp represents an AWS Amplify application configuration
 type AmplifyApp struct {
 	Name                 string            `json:"name"`
 	Repository           string            `json:"repository"`
@@ -34,6 +36,7 @@ type AmplifyApp struct {
 	CustomRules          []AmplifyRule     `json:"customRules,omitempty"`
 }
 
+// AmplifyRule represents a custom routing rule in AWS Amplify
 type AmplifyRule struct {
 	Source    string `json:"source"`
 	Target    string `json:"target"`
@@ -41,6 +44,7 @@ type AmplifyRule struct {
 	Condition string `json:"condition,omitempty"`
 }
 
+// AmplifyBranch represents a branch configuration in AWS Amplify
 type AmplifyBranch struct {
 	BranchName           string            `json:"branchName"`
 	EnableAutoBuild      bool              `json:"enableAutoBuild"`
@@ -48,6 +52,7 @@ type AmplifyBranch struct {
 	EnvironmentVariables map[string]string `json:"environmentVariables,omitempty"`
 }
 
+// AmplifyAppResponse represents the API response when creating or getting an Amplify app
 type AmplifyAppResponse struct {
 	App struct {
 		AppID         string `json:"appId"`
@@ -57,12 +62,14 @@ type AmplifyAppResponse struct {
 	} `json:"app"`
 }
 
+// AmplifyBranchResponse represents the API response when creating or getting a branch
 type AmplifyBranchResponse struct {
 	Branch struct {
 		BranchName string `json:"branchName"`
 	} `json:"branch"`
 }
 
+// NewAWSDeployer creates a new AWS Amplify deployer instance
 func NewAWSDeployer(appName, repoURL, branch, region string) (*AWSDeployer, error) {
 	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
 	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
@@ -211,7 +218,7 @@ func (d *AWSDeployer) createBranch(appID string, envVars map[string]string) erro
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, err := io.ReadAll(resp.Body)
@@ -238,7 +245,7 @@ func (d *AWSDeployer) getApp() (*AmplifyAppResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API error: %s", resp.Status)
@@ -283,7 +290,7 @@ func (d *AWSDeployer) doRequest(req *http.Request) (*AmplifyAppResponse, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

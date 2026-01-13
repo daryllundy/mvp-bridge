@@ -1,6 +1,9 @@
+// Package main provides the CLI entrypoint for MVPBridge, a tool that bridges
+// MVP codebases and production-ready deployments.
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -293,7 +296,7 @@ func runDeploy(target string) error {
 // Helper functions
 
 func checkGit() error {
-	cmd := exec.Command("git", "--version")
+	cmd := exec.CommandContext(context.Background(), "git", "--version")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git not installed")
 	}
@@ -308,7 +311,7 @@ func checkGitRepo() error {
 }
 
 func checkNode() error {
-	cmd := exec.Command("node", "--version")
+	cmd := exec.CommandContext(context.Background(), "node", "--version")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("node not installed")
 	}
@@ -334,7 +337,7 @@ func formatNodeVersion(version string) string {
 }
 
 func getGitHubRepo() (string, error) {
-	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
+	cmd := exec.CommandContext(context.Background(), "git", "config", "--get", "remote.origin.url")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("no git remote configured")

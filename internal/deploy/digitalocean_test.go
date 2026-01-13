@@ -9,6 +9,12 @@ import (
 	"testing"
 )
 
+const (
+	httpMethodGet  = "GET"
+	httpMethodPost = "POST"
+	httpMethodPut  = "PUT"
+)
+
 func TestNewDODeployer(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -39,9 +45,9 @@ func TestNewDODeployer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.token != "" {
-				os.Setenv("DIGITALOCEAN_TOKEN", tt.token)
+				_ = os.Setenv("DIGITALOCEAN_TOKEN", tt.token)
 			} else {
-				os.Unsetenv("DIGITALOCEAN_TOKEN")
+				_ = os.Unsetenv("DIGITALOCEAN_TOKEN")
 			}
 
 			deployer, err := NewDODeployer(tt.appName, tt.repoURL, tt.branch)
@@ -73,7 +79,7 @@ func TestNewDODeployer(t *testing.T) {
 		})
 	}
 
-	os.Unsetenv("DIGITALOCEAN_TOKEN")
+	_ = os.Unsetenv("DIGITALOCEAN_TOKEN")
 }
 
 func TestDOBuildSpec(t *testing.T) {
@@ -103,8 +109,8 @@ func TestDOBuildSpec(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
-			defer os.Unsetenv("DIGITALOCEAN_TOKEN")
+			_ = os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
+			defer func() { _ = os.Unsetenv("DIGITALOCEAN_TOKEN") }()
 
 			deployer, err := NewDODeployer("test-app", "https://github.com/user/repo", "main")
 			if err != nil {
@@ -223,8 +229,8 @@ func TestDOEnvVarTypeDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
-			defer os.Unsetenv("DIGITALOCEAN_TOKEN")
+			_ = os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
+			defer func() { _ = os.Unsetenv("DIGITALOCEAN_TOKEN") }()
 
 			deployer, _ := NewDODeployer("test-app", "https://github.com/user/repo", "main")
 			envVars := map[string]string{tt.key: "test-value"}
@@ -263,8 +269,8 @@ func TestDORepoURLParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
-			defer os.Unsetenv("DIGITALOCEAN_TOKEN")
+			_ = os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
+			defer func() { _ = os.Unsetenv("DIGITALOCEAN_TOKEN") }()
 
 			deployer, _ := NewDODeployer("test-app", tt.repoURL, "main")
 			spec := deployer.buildSpec(true, map[string]string{})
@@ -325,7 +331,7 @@ func TestDODeployWithMockServer(t *testing.T) {
 				}
 
 				switch {
-				case r.Method == "GET" && r.URL.Path == "/v2/apps":
+				case r.Method == httpMethodGet && r.URL.Path == "/v2/apps":
 					// List apps
 					if tt.existingApp {
 						response := struct {
@@ -350,24 +356,24 @@ func TestDODeployWithMockServer(t *testing.T) {
 								},
 							},
 						}
-						json.NewEncoder(w).Encode(response)
+						_ = json.NewEncoder(w).Encode(response)
 					} else {
-						json.NewEncoder(w).Encode(struct {
+						_ = json.NewEncoder(w).Encode(struct {
 							Apps []interface{} `json:"apps"`
 						}{Apps: []interface{}{}})
 					}
 
-				case r.Method == "POST" && r.URL.Path == "/v2/apps":
+				case r.Method == httpMethodPost && r.URL.Path == "/v2/apps":
 					// Create app
-					json.NewEncoder(w).Encode(mockResponse)
+					_ = json.NewEncoder(w).Encode(mockResponse)
 
-				case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/v2/apps/"):
+				case r.Method == httpMethodPut && strings.HasPrefix(r.URL.Path, "/v2/apps/"):
 					// Update app
-					json.NewEncoder(w).Encode(mockResponse)
+					_ = json.NewEncoder(w).Encode(mockResponse)
 
-				case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/v2/apps/"):
+				case r.Method == httpMethodGet && strings.HasPrefix(r.URL.Path, "/v2/apps/"):
 					// Get app details
-					json.NewEncoder(w).Encode(mockResponse)
+					_ = json.NewEncoder(w).Encode(mockResponse)
 
 				default:
 					http.Error(w, "Not found", http.StatusNotFound)
@@ -378,8 +384,8 @@ func TestDODeployWithMockServer(t *testing.T) {
 			// Note: We can't easily test the full Deploy function without
 			// making the API base URL configurable. This test validates
 			// the buildSpec logic instead.
-			os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
-			defer os.Unsetenv("DIGITALOCEAN_TOKEN")
+			_ = os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
+			defer func() { _ = os.Unsetenv("DIGITALOCEAN_TOKEN") }()
 
 			deployer, err := NewDODeployer("test-app", "https://github.com/user/repo", "main")
 			if err != nil {
@@ -407,8 +413,8 @@ func TestDODeployWithMockServer(t *testing.T) {
 }
 
 func TestDODeployerFieldValidation(t *testing.T) {
-	os.Setenv("DIGITALOCEAN_TOKEN", "test-token-123")
-	defer os.Unsetenv("DIGITALOCEAN_TOKEN")
+	_ = os.Setenv("DIGITALOCEAN_TOKEN", "test-token-123")
+	defer func() { _ = os.Unsetenv("DIGITALOCEAN_TOKEN") }()
 
 	deployer, err := NewDODeployer("my-app", "https://github.com/user/repo", "develop")
 	if err != nil {
@@ -437,8 +443,8 @@ func TestDODeployerFieldValidation(t *testing.T) {
 }
 
 func TestDORegionDefault(t *testing.T) {
-	os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
-	defer os.Unsetenv("DIGITALOCEAN_TOKEN")
+	_ = os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
+	defer func() { _ = os.Unsetenv("DIGITALOCEAN_TOKEN") }()
 
 	deployer, _ := NewDODeployer("test-app", "https://github.com/user/repo", "main")
 	spec := deployer.buildSpec(true, map[string]string{})
@@ -449,8 +455,8 @@ func TestDORegionDefault(t *testing.T) {
 }
 
 func TestDOInstanceDefaults(t *testing.T) {
-	os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
-	defer os.Unsetenv("DIGITALOCEAN_TOKEN")
+	_ = os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
+	defer func() { _ = os.Unsetenv("DIGITALOCEAN_TOKEN") }()
 
 	deployer, _ := NewDODeployer("test-app", "https://github.com/user/repo", "main")
 	spec := deployer.buildSpec(false, map[string]string{}) // SSR app
@@ -468,8 +474,8 @@ func TestDOInstanceDefaults(t *testing.T) {
 }
 
 func TestDOStaticSiteDefaults(t *testing.T) {
-	os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
-	defer os.Unsetenv("DIGITALOCEAN_TOKEN")
+	_ = os.Setenv("DIGITALOCEAN_TOKEN", "test-token")
+	defer func() { _ = os.Unsetenv("DIGITALOCEAN_TOKEN") }()
 
 	deployer, _ := NewDODeployer("test-app", "https://github.com/user/repo", "main")
 	spec := deployer.buildSpec(true, map[string]string{})

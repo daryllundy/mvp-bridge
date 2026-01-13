@@ -1,3 +1,6 @@
+// Package detect provides framework detection and project analysis capabilities
+// for MVPBridge. It identifies frontend frameworks, build configurations, and
+// deployment readiness issues.
 package detect
 
 import (
@@ -8,29 +11,41 @@ import (
 	"strings"
 )
 
+// Framework represents a supported frontend framework type
 type Framework string
 
 const (
-	Vite    Framework = "vite"
-	NextJS  Framework = "nextjs"
+	// Vite represents a Vite-based project
+	Vite Framework = "vite"
+	// NextJS represents a Next.js project
+	NextJS Framework = "nextjs"
+	// Unknown represents an unrecognized framework
 	Unknown Framework = "unknown"
 )
 
+// OutputType represents the output type of a build (static or server-side rendered)
 type OutputType string
 
 const (
+	// Static represents a static site build output
 	Static OutputType = "static"
-	SSR    OutputType = "ssr"
+	// SSR represents a server-side rendered application
+	SSR OutputType = "ssr"
 )
 
+// PackageManager represents the package manager used by the project
 type PackageManager string
 
 const (
-	NPM  PackageManager = "npm"
+	// NPM represents the npm package manager
+	NPM PackageManager = "npm"
+	// Yarn represents the Yarn package manager
 	Yarn PackageManager = "yarn"
+	// PNPM represents the pnpm package manager
 	PNPM PackageManager = "pnpm"
 )
 
+// Detection holds all detected project information and deployment issues
 type Detection struct {
 	Framework      Framework
 	OutputType     OutputType
@@ -41,6 +56,7 @@ type Detection struct {
 	Issues         []Issue
 }
 
+// Issue represents a deployment readiness issue that was detected
 type Issue struct {
 	Code        string
 	Description string

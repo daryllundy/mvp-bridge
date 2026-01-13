@@ -1,6 +1,9 @@
+// Package normalize provides normalization rules and execution logic for
+// MVPBridge. It applies atomic, reversible fixes to make projects deployment-ready.
 package normalize
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +13,7 @@ import (
 	"mvpbridge/internal/detect"
 )
 
+// Rule represents a single normalization rule that can check and fix deployment issues
 type Rule struct {
 	Name        string
 	Description string
@@ -17,6 +21,7 @@ type Rule struct {
 	Apply       func(root string, dryRun bool) error
 }
 
+// Normalizer orchestrates the execution of normalization rules
 type Normalizer struct {
 	Root      string
 	DryRun    bool
@@ -24,6 +29,7 @@ type Normalizer struct {
 	Rules     []Rule
 }
 
+// New creates a new Normalizer with framework-specific rules
 func New(root string, fw detect.Framework, dryRun bool) *Normalizer {
 	n := &Normalizer{
 		Root:      root,
@@ -45,6 +51,7 @@ func New(root string, fw detect.Framework, dryRun bool) *Normalizer {
 	return n
 }
 
+// Run executes all normalization rules in sequence
 func (n *Normalizer) Run() error {
 	for i, rule := range n.Rules {
 		// Check if rule needs to be applied
@@ -200,7 +207,7 @@ func fileExists(path string) bool {
 
 func gitCommit(root, message string) error {
 	// Stage all changes
-	add := exec.Command("git", "add", "-A")
+	add := exec.CommandContext(context.Background(), "git", "add", "-A")
 	add.Dir = root
 	if err := add.Run(); err != nil {
 		return err
@@ -208,7 +215,7 @@ func gitCommit(root, message string) error {
 
 	// Commit
 	// #nosec G204 - message is hardcoded in rules, not user input
-	commit := exec.Command("git", "commit", "-m", fmt.Sprintf("[mvpbridge] %s", message))
+	commit := exec.CommandContext(context.Background(), "git", "commit", "-m", fmt.Sprintf("[mvpbridge] %s", message))
 	commit.Dir = root
 	return commit.Run()
 }
