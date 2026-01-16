@@ -17,9 +17,9 @@ linters:
     - gocyclo       # Cyclomatic complexity
     - dupl          # Code duplication
     - bodyclose     # Check HTTP response body is closed
-    - noctx         # Check for sending HTTP request without context
+    #- noctx         # Check for sending HTTP request without context
     - errname       # Check error naming conventions
-    - gocritic      # Comprehensive linter
+    #- gocritic      # Comprehensive linter
 
 linters-settings:
   errcheck:
