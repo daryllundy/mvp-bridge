@@ -3,11 +3,16 @@ package deploy
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -310,12 +315,215 @@ func (d *AWSDeployer) doRequest(req *http.Request) (*AmplifyAppResponse, error) 
 }
 
 // signRequest adds AWS Signature Version 4 authentication
-// Note: This is a simplified version. For production, use AWS SDK
 func (d *AWSDeployer) signRequest(req *http.Request) {
-	// For simplicity, we'll use basic auth headers
-	// In production, you should use proper AWS SigV4 signing or the AWS SDK
-	req.Header.Set("X-Amz-Date", time.Now().UTC().Format("20060102T150405Z"))
-	// Add proper SigV4 signing here or use AWS SDK
+	d.signRequestWithTime(req, time.Now().UTC())
+}
+
+// signRequestWithTime signs the request with a specific timestamp (for testing)
+func (d *AWSDeployer) signRequestWithTime(req *http.Request, t time.Time) {
+	const service = "amplify"
+	const algorithm = "AWS4-HMAC-SHA256"
+
+	// Format timestamps
+	amzDate := t.Format("20060102T150405Z")
+	dateStamp := t.Format("20060102")
+
+	// Set required headers before signing
+	req.Header.Set("X-Amz-Date", amzDate)
+	if req.Header.Get("Host") == "" {
+		req.Header.Set("Host", req.URL.Host)
+	}
+
+	// Get payload hash
+	payloadHash := d.getPayloadHash(req)
+	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
+
+	// Create canonical request
+	canonicalRequest, signedHeaders := d.createCanonicalRequest(req, payloadHash)
+
+	// Create credential scope
+	credentialScope := fmt.Sprintf("%s/%s/%s/aws4_request", dateStamp, d.Region, service)
+
+	// Create string to sign
+	stringToSign := d.createStringToSign(algorithm, amzDate, credentialScope, canonicalRequest)
+
+	// Calculate signing key
+	signingKey := d.deriveSigningKey(d.SecretKey, dateStamp, d.Region, service)
+
+	// Calculate signature
+	signature := hex.EncodeToString(hmacSHA256(signingKey, []byte(stringToSign)))
+
+	// Create authorization header
+	authHeader := fmt.Sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+		algorithm, d.AccessKey, credentialScope, signedHeaders, signature)
+
+	req.Header.Set("Authorization", authHeader)
+}
+
+// getPayloadHash returns the SHA256 hash of the request body
+func (d *AWSDeployer) getPayloadHash(req *http.Request) string {
+	if req.Body == nil {
+		return sha256Hash([]byte(""))
+	}
+
+	// Read the body
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return sha256Hash([]byte(""))
+	}
+
+	// Restore the body for later use
+	req.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	return sha256Hash(body)
+}
+
+// createCanonicalRequest builds the canonical request string per AWS SigV4 spec
+func (d *AWSDeployer) createCanonicalRequest(req *http.Request, payloadHash string) (string, string) {
+	// Canonical URI (URL-encoded path)
+	canonicalURI := req.URL.Path
+	if canonicalURI == "" {
+		canonicalURI = "/"
+	}
+
+	// Canonical query string (sorted by parameter name)
+	canonicalQueryString := d.getCanonicalQueryString(req.URL.Query())
+
+	// Canonical headers (lowercase, sorted, trimmed)
+	canonicalHeaders, signedHeaders := d.getCanonicalHeaders(req)
+
+	// Build canonical request
+	canonicalRequest := strings.Join([]string{
+		req.Method,
+		canonicalURI,
+		canonicalQueryString,
+		canonicalHeaders,
+		signedHeaders,
+		payloadHash,
+	}, "\n")
+
+	return canonicalRequest, signedHeaders
+}
+
+// getCanonicalQueryString returns the canonical query string (sorted parameters)
+func (d *AWSDeployer) getCanonicalQueryString(query url.Values) string {
+	if len(query) == 0 {
+		return ""
+	}
+
+	// Get sorted keys
+	keys := make([]string, 0, len(query))
+	for k := range query {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Build canonical query string
+	var pairs []string
+	for _, k := range keys {
+		values := query[k]
+		sort.Strings(values)
+		for _, v := range values {
+			// AWS SigV4 requires RFC 3986 URI encoding (%20 for spaces, not +)
+			pairs = append(pairs, uriEncode(k, false)+"="+uriEncode(v, false))
+		}
+	}
+
+	return strings.Join(pairs, "&")
+}
+
+// uriEncode performs RFC 3986 URI encoding as required by AWS SigV4
+func uriEncode(s string, encodeSlash bool) string {
+	var result strings.Builder
+	for _, b := range []byte(s) {
+		if isUnreserved(b) {
+			result.WriteByte(b)
+		} else if b == '/' && !encodeSlash {
+			result.WriteByte(b)
+		} else {
+			result.WriteString(fmt.Sprintf("%%%02X", b))
+		}
+	}
+	return result.String()
+}
+
+// isUnreserved returns true if the byte is an unreserved character per RFC 3986
+func isUnreserved(b byte) bool {
+	return (b >= 'A' && b <= 'Z') ||
+		(b >= 'a' && b <= 'z') ||
+		(b >= '0' && b <= '9') ||
+		b == '-' || b == '_' || b == '.' || b == '~'
+}
+
+// getCanonicalHeaders returns canonical headers and signed header list
+func (d *AWSDeployer) getCanonicalHeaders(req *http.Request) (string, string) {
+	// Headers to sign (must include host and x-amz-date at minimum)
+	headers := make(map[string]string)
+
+	for key, values := range req.Header {
+		lowerKey := strings.ToLower(key)
+		// Include host, content-type, and all x-amz-* headers
+		if lowerKey == "host" || lowerKey == "content-type" || strings.HasPrefix(lowerKey, "x-amz-") {
+			// Trim whitespace and combine multiple values
+			var trimmedValues []string
+			for _, v := range values {
+				trimmedValues = append(trimmedValues, strings.TrimSpace(v))
+			}
+			headers[lowerKey] = strings.Join(trimmedValues, ",")
+		}
+	}
+
+	// Sort header names
+	keys := make([]string, 0, len(headers))
+	for k := range headers {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Build canonical headers string
+	var canonicalHeaders strings.Builder
+	for _, k := range keys {
+		canonicalHeaders.WriteString(k)
+		canonicalHeaders.WriteString(":")
+		canonicalHeaders.WriteString(headers[k])
+		canonicalHeaders.WriteString("\n")
+	}
+
+	signedHeaders := strings.Join(keys, ";")
+
+	return canonicalHeaders.String(), signedHeaders
+}
+
+// createStringToSign creates the string to sign per AWS SigV4 spec
+func (d *AWSDeployer) createStringToSign(algorithm, amzDate, credentialScope, canonicalRequest string) string {
+	return strings.Join([]string{
+		algorithm,
+		amzDate,
+		credentialScope,
+		sha256Hash([]byte(canonicalRequest)),
+	}, "\n")
+}
+
+// deriveSigningKey derives the signing key per AWS SigV4 spec
+func (d *AWSDeployer) deriveSigningKey(secretKey, dateStamp, region, service string) []byte {
+	kDate := hmacSHA256([]byte("AWS4"+secretKey), []byte(dateStamp))
+	kRegion := hmacSHA256(kDate, []byte(region))
+	kService := hmacSHA256(kRegion, []byte(service))
+	kSigning := hmacSHA256(kService, []byte("aws4_request"))
+	return kSigning
+}
+
+// hmacSHA256 computes HMAC-SHA256
+func hmacSHA256(key, data []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+// sha256Hash returns the hex-encoded SHA256 hash of data
+func sha256Hash(data []byte) string {
+	h := sha256.Sum256(data)
+	return hex.EncodeToString(h[:])
 }
 
 func (d *AWSDeployer) buildSpec(buildCommand, outputDir string) string {
