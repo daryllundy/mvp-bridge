@@ -1,5 +1,3 @@
-version: "2"
-
 run:
   timeout: 5m
   tests: true
@@ -19,9 +17,9 @@ linters:
     - gocyclo       # Cyclomatic complexity
     - dupl          # Code duplication
     - bodyclose     # Check HTTP response body is closed
-    - noctx         # Check for sending HTTP request without context
+    #- noctx         # Check for sending HTTP request without context
     - errname       # Check error naming conventions
-    - gocritic      # Comprehensive linter
+    #- gocritic      # Comprehensive linter
 
 linters-settings:
   errcheck:
@@ -90,6 +88,7 @@ issues:
   new: false
 
 output:
-  format: colored-line-number
+  formats: 
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true

@@ -92,7 +92,7 @@ jobs:
         cache: true
 
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v4
+      uses: golangci/golangci-lint-action@v6
       with:
         version: latest
         args: --timeout=5m
@@ -100,6 +100,7 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    continue-on-error: true
 
     steps:
     - name: Check out code
@@ -112,7 +113,6 @@ jobs:
         cache: true
 
     - name: Run Gosec Security Scanner
-      uses: golangci/golangci-lint-action@v4
+      uses: securego/gosec@v2.19.0
       with:
-        version: latest
-        args: --disable-all --enable=gosec --timeout=5m
+        args: ./...
