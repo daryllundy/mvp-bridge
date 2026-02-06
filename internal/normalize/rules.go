@@ -221,11 +221,10 @@ func gitCommit(root, message string) error {
 }
 
 func createEnvExample(root string) error {
-	envPath := filepath.Join(root, ".env")
 	examplePath := filepath.Join(root, ".env.example")
 
 	// If .env exists, extract keys
-	if data, err := os.ReadFile(envPath); err == nil {
+	if data, err := readFileInRoot(root, ".env"); err == nil {
 		lines := strings.Split(string(data), "\n")
 		var example []string
 		for _, line := range lines {
@@ -247,8 +246,7 @@ func createEnvExample(root string) error {
 }
 
 func gitignoreComplete(root string) bool {
-	path := filepath.Join(root, ".gitignore")
-	data, err := os.ReadFile(path)
+	data, err := readFileInRoot(root, ".gitignore")
 	if err != nil {
 		return false
 	}
@@ -267,7 +265,7 @@ func updateGitignore(root string) error {
 	path := filepath.Join(root, ".gitignore")
 
 	existing := ""
-	if data, err := os.ReadFile(path); err == nil {
+	if data, err := readFileInRoot(root, ".gitignore"); err == nil {
 		existing = string(data)
 	}
 
@@ -305,10 +303,26 @@ func updateGitignore(root string) error {
 
 func createGitHubWorkflow(root string) error {
 	dir := filepath.Join(root, ".github", "workflows")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, "deploy.yml"), []byte(githubWorkflow), 0600)
+}
+
+func readFileInRoot(root, rel string) ([]byte, error) {
+	base := filepath.Clean(root)
+	path := filepath.Clean(filepath.Join(base, rel))
+
+	relPath, err := filepath.Rel(base, path)
+	if err != nil {
+		return nil, err
+	}
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("path escapes project root: %s", rel)
+	}
+
+	// #nosec G304 -- path is normalized and constrained to project root above.
+	return os.ReadFile(path)
 }
 
 // Templates

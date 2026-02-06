@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -43,9 +44,7 @@ type Config struct {
 
 // Load reads config from .mvpbridge/config.yaml
 func Load(root string) (*Config, error) {
-	path := filepath.Join(root, ConfigDir, ConfigFile)
-
-	data, err := os.ReadFile(path)
+	data, err := readFileInRoot(root, filepath.Join(ConfigDir, ConfigFile))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("config not found - run 'mvpbridge init' first")
@@ -134,4 +133,20 @@ func (c *Config) GetFramework() detect.Framework {
 	default:
 		return detect.Unknown
 	}
+}
+
+func readFileInRoot(root, rel string) ([]byte, error) {
+	base := filepath.Clean(root)
+	path := filepath.Clean(filepath.Join(base, rel))
+
+	relPath, err := filepath.Rel(base, path)
+	if err != nil {
+		return nil, err
+	}
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("path escapes project root: %s", rel)
+	}
+
+	// #nosec G304 -- path is normalized and constrained to project root above.
+	return os.ReadFile(path)
 }

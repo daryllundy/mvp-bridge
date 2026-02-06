@@ -163,8 +163,7 @@ func DetectPackageManager(root string) PackageManager {
 // DetectNodeVersion finds pinned Node version
 func DetectNodeVersion(root string) string {
 	// Check .nvmrc first
-	nvmrc := filepath.Join(root, ".nvmrc")
-	if data, err := os.ReadFile(nvmrc); err == nil {
+	if data, err := readFileInRoot(root, ".nvmrc"); err == nil {
 		return strings.TrimSpace(string(data))
 	}
 
@@ -212,8 +211,7 @@ func DetectOutputType(root string, fw Framework) OutputType {
 	case NextJS:
 		// Check next.config for output: 'export'
 		for _, cfg := range []string{"next.config.js", "next.config.mjs"} {
-			path := filepath.Join(root, cfg)
-			if data, err := os.ReadFile(path); err == nil {
+			if data, err := readFileInRoot(root, cfg); err == nil {
 				content := string(data)
 				if strings.Contains(content, `output: "export"`) ||
 					strings.Contains(content, `output: 'export'`) {
@@ -262,7 +260,7 @@ func fileExists(path string) bool {
 }
 
 func readPackageJSON(root string) (*packageJSON, error) {
-	data, err := os.ReadFile(filepath.Join(root, "package.json"))
+	data, err := readFileInRoot(root, "package.json")
 	if err != nil {
 		return nil, err
 	}
@@ -273,4 +271,20 @@ func readPackageJSON(root string) (*packageJSON, error) {
 	}
 
 	return &pkg, nil
+}
+
+func readFileInRoot(root, rel string) ([]byte, error) {
+	base := filepath.Clean(root)
+	path := filepath.Clean(filepath.Join(base, rel))
+
+	relPath, err := filepath.Rel(base, path)
+	if err != nil {
+		return nil, err
+	}
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("path escapes project root: %s", rel)
+	}
+
+	// #nosec G304 -- path is normalized and constrained to project root above.
+	return os.ReadFile(path)
 }
