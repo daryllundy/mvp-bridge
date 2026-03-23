@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
-	"unicode"
 )
 
 const defaultAzureRegion = "eastus"
@@ -250,29 +249,7 @@ func defaultAzRunner(ctx context.Context, workdir string, env []string, args ...
 }
 
 func sanitizeAzureName(appName string) string {
-	lowered := strings.ToLower(appName)
-	var builder strings.Builder
-	prevDash := false
-
-	for _, r := range lowered {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			builder.WriteRune(r)
-			prevDash = false
-		case r == '-' || r == '_' || unicode.IsSpace(r):
-			if builder.Len() == 0 || prevDash {
-				continue
-			}
-			builder.WriteByte('-')
-			prevDash = true
-		}
-	}
-
-	name := strings.Trim(builder.String(), "-")
-	if len(name) > 32 {
-		name = strings.Trim(name[:32], "-")
-	}
-	return name
+	return sanitizeDashedName(appName, 32)
 }
 
 func formatAzureEnvVars(envVars map[string]string) []string {
