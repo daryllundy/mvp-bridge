@@ -3,7 +3,6 @@
 package deploy
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -176,13 +175,7 @@ func (d *DODeployer) buildSpec(isStatic bool, envVars map[string]string) *DOAppS
 }
 
 func (d *DODeployer) createApp(spec *DOAppSpec) (*DOAppResponse, error) {
-	body := map[string]interface{}{"spec": spec}
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(context.Background(), "POST", doAppsURL().String(), bytes.NewBuffer(jsonBody))
+	req, err := newJSONRequest(http.MethodPost, doAppsURL(), map[string]interface{}{"spec": spec})
 	if err != nil {
 		return nil, err
 	}
@@ -191,18 +184,12 @@ func (d *DODeployer) createApp(spec *DOAppSpec) (*DOAppResponse, error) {
 }
 
 func (d *DODeployer) updateApp(appID string, spec *DOAppSpec) (*DOAppResponse, error) {
-	body := map[string]interface{}{"spec": spec}
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-
 	reqURL, err := doAppURL(appID)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "PUT", reqURL.String(), bytes.NewBuffer(jsonBody))
+	req, err := newJSONRequest(http.MethodPut, reqURL, map[string]interface{}{"spec": spec})
 	if err != nil {
 		return nil, err
 	}
@@ -211,28 +198,14 @@ func (d *DODeployer) updateApp(appID string, spec *DOAppSpec) (*DOAppResponse, e
 }
 
 func (d *DODeployer) getApp() (*DOAppResponse, error) {
-	// List all apps and find by name
-	req, err := http.NewRequestWithContext(context.Background(), "GET", doAppsURL().String(), nil)
+	req, err := newJSONRequest(http.MethodGet, doAppsURL(), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+d.Token)
-	req.Header.Set("Content-Type", "application/json")
-
-	if err := validateTrustedURL(req.URL, doAPIBaseURL.Host); err != nil {
-		return nil, err
-	}
-
-	// #nosec G704 -- req.URL is restricted to the DigitalOcean API host by validateTrustedURL above.
-	resp, err := d.client.Do(req)
+	body, err := executeRequest(d.client, req, doAPIBaseURL.Host, d.withAuthHeaders)
 	if err != nil {
 		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: %s", resp.Status)
 	}
 
 	var result struct {
@@ -244,7 +217,7 @@ func (d *DODeployer) getApp() (*DOAppResponse, error) {
 		} `json:"apps"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
 
@@ -264,7 +237,7 @@ func (d *DODeployer) getAppByID(id string) (*DOAppResponse, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", reqURL.String(), nil)
+	req, err := newJSONRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -273,34 +246,12 @@ func (d *DODeployer) getAppByID(id string) (*DOAppResponse, error) {
 }
 
 func (d *DODeployer) doRequest(req *http.Request) (*DOAppResponse, error) {
-	if err := validateTrustedURL(req.URL, doAPIBaseURL.Host); err != nil {
-		return nil, err
-	}
+	return executeJSONRequest[DOAppResponse](d.client, req, doAPIBaseURL.Host, d.withAuthHeaders)
+}
 
+func (d *DODeployer) withAuthHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+d.Token)
 	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result DOAppResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("parsing response: %w", err)
-	}
-
-	return &result, nil
 }
 
 func doAppsURL() *url.URL {

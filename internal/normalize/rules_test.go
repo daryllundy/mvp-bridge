@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"mvpbridge/internal/detect"
+	"mvpbridge/internal/projectfs"
 )
 
 func TestNew(t *testing.T) {
@@ -444,7 +445,7 @@ DATABASE_URL=mysql://localhost
 	}
 }
 
-func TestFileExists(t *testing.T) {
+func TestProjectFSExists(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a test file
@@ -453,12 +454,12 @@ func TestFileExists(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	if !fileExists(testFile) {
-		t.Error("fileExists should return true for existing file")
+	if !projectfs.Exists(testFile) {
+		t.Error("Exists should return true for existing file")
 	}
 
 	nonExistent := filepath.Join(tmpDir, "missing.txt")
-	if fileExists(nonExistent) {
-		t.Error("fileExists should return false for non-existent file")
+	if projectfs.Exists(nonExistent) {
+		t.Error("Exists should return false for non-existent file")
 	}
 }

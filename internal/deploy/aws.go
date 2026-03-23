@@ -2,7 +2,6 @@ package deploy
 
 import (
 	"bytes"
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -163,7 +162,7 @@ func (d *AWSDeployer) createApp(envVars map[string]string, buildCommand, outputD
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "POST", reqURL.String(), bytes.NewBuffer(jsonBody))
+	req, err := newJSONRequest(http.MethodPost, reqURL, json.RawMessage(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +196,7 @@ func (d *AWSDeployer) updateApp(appID string, envVars map[string]string, buildCo
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "POST", reqURL.String(), bytes.NewBuffer(jsonBody))
+	req, err := newJSONRequest(http.MethodPost, reqURL, json.RawMessage(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -223,34 +222,13 @@ func (d *AWSDeployer) createBranch(appID string, envVars map[string]string) erro
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "POST", reqURL.String(), bytes.NewBuffer(jsonBody))
+	req, err := newJSONRequest(http.MethodPost, reqURL, json.RawMessage(jsonBody))
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	d.signRequest(req)
-
-	if err := validateTrustedURL(req.URL, d.amplifyHost()); err != nil {
-		return err
-	}
-
-	// #nosec G704 -- req.URL is restricted to the AWS Amplify API host by validateTrustedURL above.
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("API error %d (failed to read body: %w)", resp.StatusCode, err)
-		}
-		return fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	_, err = executeRequest(d.client, req, d.amplifyHost(), d.withSignedJSONHeaders)
+	return err
 }
 
 func (d *AWSDeployer) getApp() (*AmplifyAppResponse, error) {
@@ -259,22 +237,14 @@ func (d *AWSDeployer) getApp() (*AmplifyAppResponse, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", reqURL.String(), nil)
+	req, err := newJSONRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	d.signRequest(req)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := d.client.Do(req)
+	body, err := executeRequest(d.client, req, d.amplifyHost(), d.withSignedJSONHeaders)
 	if err != nil {
 		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: %s", resp.Status)
 	}
 
 	var result struct {
@@ -284,7 +254,7 @@ func (d *AWSDeployer) getApp() (*AmplifyAppResponse, error) {
 		} `json:"apps"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
 
@@ -304,7 +274,7 @@ func (d *AWSDeployer) getAppByID(appID string) (*AmplifyAppResponse, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", reqURL.String(), nil)
+	req, err := newJSONRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -313,34 +283,12 @@ func (d *AWSDeployer) getAppByID(appID string) (*AmplifyAppResponse, error) {
 }
 
 func (d *AWSDeployer) doRequest(req *http.Request) (*AmplifyAppResponse, error) {
-	if err := validateTrustedURL(req.URL, d.amplifyHost()); err != nil {
-		return nil, err
-	}
+	return executeJSONRequest[AmplifyAppResponse](d.client, req, d.amplifyHost(), d.withSignedJSONHeaders)
+}
 
-	d.signRequest(req)
+func (d *AWSDeployer) withSignedJSONHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result AmplifyAppResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("parsing response: %w", err)
-	}
-
-	return &result, nil
+	d.signRequest(req)
 }
 
 func (d *AWSDeployer) amplifyBaseURL() (*url.URL, error) {

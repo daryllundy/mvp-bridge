@@ -295,6 +295,12 @@ func runDeploy(target string) error {
 
 // Helper functions
 
+type deployPreparation struct {
+	RepoURL string
+	AppName string
+	EnvVars map[string]string
+}
+
 func checkGit() error {
 	cmd := exec.CommandContext(context.Background(), "git", "--version")
 	if err := cmd.Run(); err != nil {
@@ -343,28 +349,24 @@ func getGitHubRepo() (string, error) {
 		return "", fmt.Errorf("no git remote configured")
 	}
 
-	url := strings.TrimSpace(string(output))
-	// Convert SSH to HTTPS format if needed
-	if strings.HasPrefix(url, "git@github.com:") {
-		url = strings.Replace(url, "git@github.com:", "https://github.com/", 1)
-	}
-	url = strings.TrimSuffix(url, ".git")
-
-	return url, nil
+	return normalizeGitHubRemoteURL(strings.TrimSpace(string(output))), nil
 }
 
 func extractEnvVars() (map[string]string, error) {
-	envVars := make(map[string]string)
-
 	data, err := os.ReadFile(".env")
 	if err != nil {
 		if os.IsNotExist(err) {
-			return envVars, nil
+			return map[string]string{}, nil
 		}
 		return nil, err
 	}
 
-	lines := strings.Split(string(data), "\n")
+	return parseEnvVars(string(data)), nil
+}
+
+func parseEnvVars(content string) map[string]string {
+	envVars := make(map[string]string)
+	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -379,7 +381,45 @@ func extractEnvVars() (map[string]string, error) {
 		}
 	}
 
-	return envVars, nil
+	return envVars
+}
+
+func normalizeGitHubRemoteURL(raw string) string {
+	url := strings.TrimSpace(raw)
+	if strings.HasPrefix(url, "git@github.com:") {
+		url = strings.Replace(url, "git@github.com:", "https://github.com/", 1)
+	}
+	return strings.TrimSuffix(url, ".git")
+}
+
+func deriveAppName(configAppName, repoURL string) string {
+	if configAppName != "" {
+		return configAppName
+	}
+
+	parts := strings.Split(strings.TrimSuffix(repoURL, "/"), "/")
+	if len(parts) > 0 && parts[len(parts)-1] != "" {
+		return parts[len(parts)-1]
+	}
+	return "mvpbridge-app"
+}
+
+func prepareDeploy(cfg *config.Config) (*deployPreparation, error) {
+	repoURL, err := getGitHubRepo()
+	if err != nil {
+		return nil, fmt.Errorf("getting GitHub repo: %w", err)
+	}
+
+	envVars, err := extractEnvVars()
+	if err != nil {
+		return nil, fmt.Errorf("extracting env vars: %w", err)
+	}
+
+	return &deployPreparation{
+		RepoURL: repoURL,
+		AppName: deriveAppName(cfg.Deploy.AppName, repoURL),
+		EnvVars: envVars,
+	}, nil
 }
 
 // Deploy functions
@@ -388,47 +428,28 @@ func deployDigitalOcean(cfg *config.Config) error {
 	fmt.Println("Deploying to DigitalOcean...")
 	fmt.Println()
 
-	// Get GitHub repo URL
-	repoURL, err := getGitHubRepo()
+	prep, err := prepareDeploy(cfg)
 	if err != nil {
-		return fmt.Errorf("getting GitHub repo: %w", err)
-	}
-
-	// Determine app name
-	appName := cfg.Deploy.AppName
-	if appName == "" {
-		// Extract from repo URL
-		parts := strings.Split(repoURL, "/")
-		if len(parts) > 0 {
-			appName = parts[len(parts)-1]
-		} else {
-			appName = "mvpbridge-app"
-		}
+		return err
 	}
 
 	// Create deployer
-	deployer, err := deploy.NewDODeployer(appName, repoURL, "main")
+	deployer, err := deploy.NewDODeployer(prep.AppName, prep.RepoURL, "main")
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("[1/4] Validating credentials... ✓")
 
-	// Extract env vars
-	envVars, err := extractEnvVars()
-	if err != nil {
-		return fmt.Errorf("extracting env vars: %w", err)
-	}
-
 	fmt.Println("[2/4] Creating app spec... ✓")
 
 	// Determine if static
 	isStatic := cfg.IsStatic()
 
-	fmt.Printf("[3/4] Configuring secrets (%d vars)... ✓\n", len(envVars))
+	fmt.Printf("[3/4] Configuring secrets (%d vars)... ✓\n", len(prep.EnvVars))
 
 	// Deploy
-	result, err := deployer.Deploy(isStatic, envVars)
+	result, err := deployer.Deploy(isStatic, prep.EnvVars)
 	if err != nil {
 		return fmt.Errorf("deployment failed: %w", err)
 	}
@@ -454,21 +475,9 @@ func deployAWS(cfg *config.Config) error {
 	fmt.Println("Deploying to AWS Amplify...")
 	fmt.Println()
 
-	// Get GitHub repo URL
-	repoURL, err := getGitHubRepo()
+	prep, err := prepareDeploy(cfg)
 	if err != nil {
-		return fmt.Errorf("getting GitHub repo: %w", err)
-	}
-
-	// Determine app name
-	appName := cfg.Deploy.AppName
-	if appName == "" {
-		parts := strings.Split(repoURL, "/")
-		if len(parts) > 0 {
-			appName = parts[len(parts)-1]
-		} else {
-			appName = "mvpbridge-app"
-		}
+		return err
 	}
 
 	// Determine region
@@ -478,18 +487,12 @@ func deployAWS(cfg *config.Config) error {
 	}
 
 	// Create deployer
-	deployer, err := deploy.NewAWSDeployer(appName, repoURL, "main", region)
+	deployer, err := deploy.NewAWSDeployer(prep.AppName, prep.RepoURL, "main", region)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("[1/4] Validating credentials... ✓")
-
-	// Extract env vars
-	envVars, err := extractEnvVars()
-	if err != nil {
-		return fmt.Errorf("extracting env vars: %w", err)
-	}
 
 	fmt.Println("[2/4] Creating app spec... ✓")
 
@@ -510,10 +513,10 @@ func deployAWS(cfg *config.Config) error {
 	// Determine if static
 	isStatic := cfg.IsStatic()
 
-	fmt.Printf("[3/4] Configuring secrets (%d vars)... ✓\n", len(envVars))
+	fmt.Printf("[3/4] Configuring secrets (%d vars)... ✓\n", len(prep.EnvVars))
 
 	// Deploy
-	result, err := deployer.Deploy(isStatic, envVars, buildCommand, outputDir)
+	result, err := deployer.Deploy(isStatic, prep.EnvVars, buildCommand, outputDir)
 	if err != nil {
 		return fmt.Errorf("deployment failed: %w", err)
 	}
