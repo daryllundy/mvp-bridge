@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"mvpbridge/internal/detect"
-	"mvpbridge/internal/projectfs"
+	"github.com/daryllundy/mvp-bridge/internal/detect"
+	"github.com/daryllundy/mvp-bridge/internal/projectfs"
 )
 
 func TestNew(t *testing.T) {

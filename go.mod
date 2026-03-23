@@ -1,4 +1,4 @@
-module mvpbridge
+module github.com/daryllundy/mvp-bridge
 
 go 1.21
 

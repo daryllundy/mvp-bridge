@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"mvpbridge/internal/detect"
-	"mvpbridge/internal/projectfs"
+	"github.com/daryllundy/mvp-bridge/internal/detect"
+	"github.com/daryllundy/mvp-bridge/internal/projectfs"
 )
 
 // Rule represents a single normalization rule that can check and fix deployment issues

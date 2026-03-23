@@ -9,8 +9,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"mvpbridge/internal/detect"
-	"mvpbridge/internal/projectfs"
+	"github.com/daryllundy/mvp-bridge/internal/detect"
+	"github.com/daryllundy/mvp-bridge/internal/projectfs"
 )
 
 const (
