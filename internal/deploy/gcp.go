@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -268,29 +267,7 @@ func defaultGcloudRunner(ctx context.Context, workdir string, env []string, args
 }
 
 func sanitizeCloudRunServiceName(appName string) string {
-	lowered := strings.ToLower(appName)
-	var builder strings.Builder
-	prevDash := false
-
-	for _, r := range lowered {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			builder.WriteRune(r)
-			prevDash = false
-		case r == '-' || r == '_' || unicode.IsSpace(r):
-			if builder.Len() == 0 || prevDash {
-				continue
-			}
-			builder.WriteByte('-')
-			prevDash = true
-		}
-	}
-
-	serviceName := strings.Trim(builder.String(), "-")
-	if len(serviceName) > 63 {
-		serviceName = strings.Trim(serviceName[:63], "-")
-	}
-	return serviceName
+	return sanitizeDashedName(appName, 63)
 }
 
 func isCloudRunNotFoundError(err error) bool {

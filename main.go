@@ -23,10 +23,17 @@ type gcpDeployer interface {
 	Deploy(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error)
 }
 
+type azureDeployer interface {
+	Deploy(isStatic bool, envVars map[string]string) (*deploy.AzureContainerAppResponse, error)
+}
+
 var (
 	prepareDeployFunc  = prepareDeploy
 	newGCPDeployerFunc = func(appName, projectID, region string) (gcpDeployer, error) {
 		return deploy.NewGCPDeployer(appName, projectID, region)
+	}
+	newAzureDeployerFunc = func(appName, resourceGroup, environment, region, subscriptionID string) (azureDeployer, error) {
+		return deploy.NewAzureDeployer(appName, resourceGroup, environment, region, subscriptionID)
 	}
 )
 
@@ -64,7 +71,7 @@ func initCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&target, "target", "t", "", "Deployment target (do, aws, gcp)")
+	cmd.Flags().StringVarP(&target, "target", "t", "", "Deployment target (do, aws, gcp, azure)")
 	cmd.Flags().StringVarP(&framework, "framework", "f", "", "Framework (vite, nextjs)")
 
 	return cmd
@@ -104,7 +111,7 @@ func deployCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy [target]",
 		Short: "Deploy to target platform",
-		Long:  `Deploys your application to the specified platform (do for DigitalOcean, aws for AWS, gcp for Google Cloud Run).`,
+		Long:  `Deploys your application to the specified platform (do for DigitalOcean, aws for AWS, gcp for Google Cloud Run, azure for Azure Container Apps).`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runDeploy(args[0])
@@ -301,8 +308,10 @@ func runDeploy(target string) error {
 		return deployAWS(cfg)
 	case "gcp":
 		return deployGCP(cfg)
+	case "azure":
+		return deployAzure(cfg)
 	default:
-		return fmt.Errorf("unknown target: %s (supported: do, aws, gcp)", target)
+		return fmt.Errorf("unknown target: %s (supported: do, aws, gcp, azure)", target)
 	}
 }
 
@@ -592,6 +601,57 @@ func deployGCP(cfg *config.Config) error {
 
 	if result.Service.URL != "" {
 		fmt.Printf("  App URL: %s\n", result.Service.URL)
+	}
+	if result.ConsoleURL != "" {
+		fmt.Printf("  Console: %s\n", result.ConsoleURL)
+	}
+
+	return nil
+}
+
+func deployAzure(cfg *config.Config) error {
+	fmt.Println("Deploying to Azure Container Apps...")
+	fmt.Println()
+
+	prep, err := prepareDeployFunc(cfg)
+	if err != nil {
+		return err
+	}
+
+	region := cfg.Deploy.Region
+	if region == "" {
+		region = "eastus"
+	}
+
+	deployer, err := newAzureDeployerFunc(
+		prep.AppName,
+		cfg.Deploy.ResourceGroup,
+		cfg.Deploy.Environment,
+		region,
+		cfg.Deploy.SubscriptionID,
+	)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("[1/4] Validating credentials... ✓")
+	fmt.Println("[2/4] Preparing Container App deployment... ✓")
+
+	isStatic := cfg.IsStatic()
+
+	fmt.Printf("[3/4] Configuring secrets (%d vars)... ✓\n", len(prep.EnvVars))
+
+	result, err := deployer.Deploy(isStatic, prep.EnvVars)
+	if err != nil {
+		return fmt.Errorf("deployment failed: %w", err)
+	}
+
+	fmt.Println("[4/4] Triggering deployment... ✓")
+	fmt.Println()
+	fmt.Println("Deployment started!")
+
+	if result.App.URL != "" {
+		fmt.Printf("  App URL: %s\n", result.App.URL)
 	}
 	if result.ConsoleURL != "" {
 		fmt.Printf("  Console: %s\n", result.ConsoleURL)
