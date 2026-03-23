@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"mvpbridge/internal/projectfs"
+	"github.com/daryllundy/mvp-bridge/internal/projectfs"
 )
 
 // Framework represents a supported frontend framework type

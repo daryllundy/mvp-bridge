@@ -9,10 +9,10 @@ import (
 	"os/exec"
 	"strings"
 
-	"mvpbridge/internal/config"
-	"mvpbridge/internal/deploy"
-	"mvpbridge/internal/detect"
-	"mvpbridge/internal/normalize"
+	"github.com/daryllundy/mvp-bridge/internal/config"
+	"github.com/daryllundy/mvp-bridge/internal/deploy"
+	"github.com/daryllundy/mvp-bridge/internal/detect"
+	"github.com/daryllundy/mvp-bridge/internal/normalize"
 
 	"github.com/spf13/cobra"
 )

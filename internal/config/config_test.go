@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"mvpbridge/internal/detect"
+	"github.com/daryllundy/mvp-bridge/internal/detect"
 )
 
 func TestLoad(t *testing.T) {

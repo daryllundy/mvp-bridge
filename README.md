@@ -1,6 +1,6 @@
 # MVPBridge
 
-[![CI](https://github.com/daryllundy/mvp-bridge/workflows/CI/badge.svg)](https://github.com/daryllundy/mvp-bridge/actions)
+[![CI](https://github.com/daryllundy/mvp-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/daryllundy/mvp-bridge/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/daryllundy/mvp-bridge)](https://goreportcard.com/report/github.com/daryllundy/mvp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -13,10 +13,17 @@ Your MVP works locally.
 MVPBridge makes it work everywhere else.
 ```
 
+## Project Status
+
+- `v0.x` active development
+- Supports Vite and Next.js (static + SSR detection paths)
+- Supports deployment to DigitalOcean App Platform and AWS Amplify
+- Release artifacts are published on GitHub Releases
+
 ## Quick Start
 
 ```bash
-# Install with Go (or download from GitHub Releases)
+# Install:
 go install github.com/daryllundy/mvp-bridge@latest
 
 # In your project directory
@@ -36,12 +43,12 @@ mvpbridge deploy do
 | `inspect` | Analyzes repo, reports what needs fixing |
 | `normalize` | Adds Dockerfile, CI/CD, pins versions |
 | `deploy do` | Ships to DigitalOcean App Platform |
+| `deploy aws` | Ships to AWS Amplify |
 
 ## Supported Frameworks
 
 - ✅ **Vite + React** (primary)
-- ✅ **Next.js** (static export)
-- 🚧 **Next.js** (SSR) - coming soon
+- ✅ **Next.js** (static export + SSR)
 
 ## Supported Platforms
 
@@ -64,7 +71,7 @@ MVPBridge is deliberately simple:
 
 ```bash
 git clone https://github.com/daryllundy/mvp-bridge
-cd mvpbridge
+cd mvp-bridge
 go build -o mvpbridge ./main.go
 ```
 
@@ -245,7 +252,7 @@ Not yet. Single-app repos only for v1.
 
 ## Testing
 
-MVPBridge has comprehensive test coverage for core functionality:
+MVPBridge includes tests across detection, deploy, config, and normalization packages:
 
 ```bash
 # Run all tests
@@ -260,11 +267,6 @@ go test ./... -cover
 # Run specific package
 go test ./internal/deploy -v
 ```
-
-**Test Coverage:**
-- Detection logic: 46.8%
-- Deployment logic: 15.1%
-- 65+ test cases across all packages
 
 See [TESTING.md](./TESTING.md) for detailed testing documentation.
 
