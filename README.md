@@ -185,7 +185,7 @@ Deployment started!
   Dashboard: https://cloud.digitalocean.com/apps/xxxxx
 ```
 
-For detailed AWS setup instructions, see [AWS_DEPLOYMENT.md](./AWS_DEPLOYMENT.md)
+For detailed AWS setup instructions, see [AWS_DEPLOYMENT.md](./docs/AWS_DEPLOYMENT.md)
 
 ## Environment Variables
 
@@ -268,14 +268,14 @@ go test ./... -cover
 go test ./internal/deploy -v
 ```
 
-See [TESTING.md](./TESTING.md) for detailed testing documentation.
+See [TESTING.md](./docs/TESTING.md) for detailed testing documentation.
 
 ## Contributing
 
 1. Fork the repo
 2. Create a feature branch
 3. Make your changes
-4. Write tests: See [TESTING.md](./TESTING.md)
+4. Write tests: See [TESTING.md](./docs/TESTING.md)
 5. Run tests: `go test ./...`
 6. Submit a PR
 
