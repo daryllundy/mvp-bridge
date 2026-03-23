@@ -57,6 +57,26 @@ target: aws
 			},
 		},
 		{
+			name: "GCP config with project ID",
+			configYAML: `version: 1
+framework: vite
+target: gcp
+deploy:
+  project_id: demo-project
+  region: us-central1
+`,
+			wantErr: false,
+			checkFunc: func(c *Config) error {
+				if c.Target != "gcp" {
+					t.Errorf("Expected target gcp, got %s", c.Target)
+				}
+				if c.Deploy.ProjectID != "demo-project" {
+					t.Errorf("Expected project ID demo-project, got %s", c.Deploy.ProjectID)
+				}
+				return nil
+			},
+		},
+		{
 			name:       "Missing config",
 			configYAML: "",
 			wantErr:    true,
@@ -131,6 +151,14 @@ func TestSave(t *testing.T) {
 				Target:    "aws",
 			},
 		},
+		{
+			name: "Save with GCP deploy settings",
+			config: &Config{
+				Version:   1,
+				Framework: "vite",
+				Target:    "gcp",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -140,6 +168,10 @@ func TestSave(t *testing.T) {
 			// Set detected values
 			tt.config.Detected.PackageManager = "npm"
 			tt.config.Detected.NodeVersion = "20"
+			if tt.config.Target == "gcp" {
+				tt.config.Deploy.ProjectID = "demo-project"
+				tt.config.Deploy.Region = "us-central1"
+			}
 
 			err := tt.config.Save(tmpDir)
 			if err != nil {
@@ -166,6 +198,9 @@ func TestSave(t *testing.T) {
 			}
 			if loaded.Target != tt.config.Target {
 				t.Errorf("Expected target %s, got %s", tt.config.Target, loaded.Target)
+			}
+			if loaded.Deploy.ProjectID != tt.config.Deploy.ProjectID {
+				t.Errorf("Expected project ID %s, got %s", tt.config.Deploy.ProjectID, loaded.Deploy.ProjectID)
 			}
 		})
 	}
@@ -210,6 +245,23 @@ func TestNewFromDetection(t *testing.T) {
 				Version:   1,
 				Framework: "nextjs",
 				Target:    "aws",
+			},
+		},
+		{
+			name: "GCP target preserved",
+			detection: &detect.Detection{
+				Framework:      detect.Vite,
+				PackageManager: detect.PNPM,
+				NodeVersion:    "20",
+				BuildCommand:   "pnpm build",
+				OutputDir:      "dist",
+				OutputType:     detect.Static,
+			},
+			target: "gcp",
+			expected: &Config{
+				Version:   1,
+				Framework: "vite",
+				Target:    "gcp",
 			},
 		},
 	}
@@ -267,6 +319,15 @@ func TestValidate(t *testing.T) {
 				Version:   1,
 				Framework: "nextjs",
 				Target:    "aws",
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid gcp config",
+			config: &Config{
+				Version:   1,
+				Framework: "vite",
+				Target:    "gcp",
 			},
 			wantErr: false,
 		},

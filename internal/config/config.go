@@ -32,6 +32,7 @@ type targetName string
 const (
 	targetDO  targetName = "do"
 	targetAWS targetName = "aws"
+	targetGCP targetName = "gcp"
 )
 
 type outputTypeName string
@@ -57,8 +58,9 @@ type Config struct {
 
 	// Deployment settings
 	Deploy struct {
-		AppName string `yaml:"app_name,omitempty"`
-		Region  string `yaml:"region,omitempty"`
+		AppName   string `yaml:"app_name,omitempty"`
+		Region    string `yaml:"region,omitempty"`
+		ProjectID string `yaml:"project_id,omitempty"`
 	} `yaml:"deploy,omitempty"`
 }
 
@@ -166,7 +168,7 @@ func parseFrameworkName(value string) (frameworkName, bool) {
 
 func parseTargetName(value string) (targetName, bool) {
 	switch targetName(value) {
-	case targetDO, targetAWS:
+	case targetDO, targetAWS, targetGCP:
 		return targetName(value), true
 	default:
 		return "", false

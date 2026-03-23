@@ -1,5 +1,5 @@
 // Package deploy provides cloud platform deployment implementations for
-// MVPBridge. It supports DigitalOcean App Platform and AWS Amplify.
+// MVPBridge. It supports DigitalOcean App Platform, AWS Amplify, and Google Cloud Run.
 package deploy
 
 import (
