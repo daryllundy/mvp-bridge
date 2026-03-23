@@ -74,14 +74,61 @@ type packageJSON struct {
 	} `json:"engines"`
 }
 
+type scanContext struct {
+	root      string
+	pkg       *packageJSON
+	pkgErr    error
+	pkgLoaded bool
+
+	fileData map[string][]byte
+	fileErr  map[string]error
+}
+
+func newScanContext(root string) *scanContext {
+	return &scanContext{
+		root:     root,
+		fileData: make(map[string][]byte),
+		fileErr:  make(map[string]error),
+	}
+}
+
+func (s *scanContext) readPackageJSON() (*packageJSON, error) {
+	if s.pkgLoaded {
+		return s.pkg, s.pkgErr
+	}
+
+	s.pkgLoaded = true
+	s.pkg, s.pkgErr = readPackageJSON(s.root)
+	return s.pkg, s.pkgErr
+}
+
+func (s *scanContext) readFile(rel string) ([]byte, error) {
+	if data, ok := s.fileData[rel]; ok {
+		return data, nil
+	}
+	if err, ok := s.fileErr[rel]; ok {
+		return nil, err
+	}
+
+	data, err := readFileInRoot(s.root, rel)
+	if err != nil {
+		s.fileErr[rel] = err
+		return nil, err
+	}
+
+	s.fileData[rel] = data
+	return data, nil
+}
+
 // DetectAll runs all detection logic and returns a complete report
 func DetectAll(root string) (*Detection, error) {
+	scan := newScanContext(root)
 	d := &Detection{
 		Issues: make([]Issue, 0),
 	}
 
 	// Detect framework
-	fw, err := DetectFramework(root)
+	fw, err := detectFramework(scan)
 	if err != nil {
 		d.Framework = Unknown
 		d.Issues = append(d.Issues, Issue{
@@ -97,7 +144,7 @@ func DetectAll(root string) (*Detection, error) {
 	d.PackageManager = DetectPackageManager(root)
 
 	// Detect Node version
-	d.NodeVersion = DetectNodeVersion(root)
+	d.NodeVersion = detectNodeVersion(scan)
 	if d.NodeVersion == "" {
 		d.Issues = append(d.Issues, Issue{
 			Code:        "NODE_NOT_PINNED",
@@ -107,10 +154,10 @@ func DetectAll(root string) (*Detection, error) {
 	}
 
 	// Detect build command and output
-	d.BuildCommand, d.OutputDir = DetectBuildConfig(root, d.Framework)
+	d.BuildCommand, d.OutputDir = detectBuildConfig(scan, d.Framework)
 
 	// Detect output type
-	d.OutputType = DetectOutputType(root, d.Framework)
+	d.OutputType = detectOutputType(scan, d.Framework)
 
 	// Check for missing files
 	d.Issues = append(d.Issues, CheckMissingFiles(root)...)
@@ -120,10 +167,14 @@ func DetectAll(root string) (*Detection, error) {
 
 // DetectFramework determines which framework the project uses
 func DetectFramework(root string) (Framework, error) {
+	return detectFramework(newScanContext(root))
+}
+
+func detectFramework(scan *scanContext) (Framework, error) {
 	// Check for Next.js first (more specific)
 	nextConfigs := []string{"next.config.js", "next.config.mjs", "next.config.ts"}
 	for _, cfg := range nextConfigs {
-		if projectfs.Exists(filepath.Join(root, cfg)) {
+		if projectfs.Exists(filepath.Join(scan.root, cfg)) {
 			return NextJS, nil
 		}
 	}
@@ -131,13 +182,13 @@ func DetectFramework(root string) (Framework, error) {
 	// Check for Vite
 	viteConfigs := []string{"vite.config.js", "vite.config.ts", "vite.config.mjs"}
 	for _, cfg := range viteConfigs {
-		if projectfs.Exists(filepath.Join(root, cfg)) {
+		if projectfs.Exists(filepath.Join(scan.root, cfg)) {
 			return Vite, nil
 		}
 	}
 
 	// Fallback: check package.json dependencies
-	pkg, err := readPackageJSON(root)
+	pkg, err := scan.readPackageJSON()
 	if err == nil {
 		if _, hasNext := pkg.Dependencies["next"]; hasNext {
 			return NextJS, nil
@@ -163,13 +214,17 @@ func DetectPackageManager(root string) PackageManager {
 
 // DetectNodeVersion finds pinned Node version
 func DetectNodeVersion(root string) string {
+	return detectNodeVersion(newScanContext(root))
+}
+
+func detectNodeVersion(scan *scanContext) string {
 	// Check .nvmrc first
-	if data, err := readFileInRoot(root, ".nvmrc"); err == nil {
+	if data, err := scan.readFile(".nvmrc"); err == nil {
 		return strings.TrimSpace(string(data))
 	}
 
 	// Check package.json engines
-	pkg, err := readPackageJSON(root)
+	pkg, err := scan.readPackageJSON()
 	if err == nil && pkg.Engines.Node != "" {
 		return pkg.Engines.Node
 	}
@@ -179,7 +234,11 @@ func DetectNodeVersion(root string) string {
 
 // DetectBuildConfig returns build command and output directory
 func DetectBuildConfig(root string, fw Framework) (buildCmd, outputDir string) {
-	pkg, err := readPackageJSON(root)
+	return detectBuildConfig(newScanContext(root), fw)
+}
+
+func detectBuildConfig(scan *scanContext, fw Framework) (buildCmd, outputDir string) {
+	pkg, err := scan.readPackageJSON()
 	if err != nil {
 		return "", ""
 	}
@@ -206,13 +265,17 @@ func DetectBuildConfig(root string, fw Framework) (buildCmd, outputDir string) {
 
 // DetectOutputType determines if output is static or SSR
 func DetectOutputType(root string, fw Framework) OutputType {
+	return detectOutputType(newScanContext(root), fw)
+}
+
+func detectOutputType(scan *scanContext, fw Framework) OutputType {
 	switch fw {
 	case Vite:
 		return Static // Vite is always static by default
 	case NextJS:
 		// Check next.config for output: 'export'
 		for _, cfg := range []string{"next.config.js", "next.config.mjs"} {
-			if data, err := readFileInRoot(root, cfg); err == nil {
+			if data, err := scan.readFile(cfg); err == nil {
 				content := string(data)
 				if strings.Contains(content, `output: "export"`) ||
 					strings.Contains(content, `output: 'export'`) {

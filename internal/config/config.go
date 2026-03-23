@@ -20,6 +20,26 @@ const (
 	ConfigFile = "config.yaml"
 )
 
+type frameworkName string
+
+const (
+	frameworkVite   frameworkName = "vite"
+	frameworkNextJS frameworkName = "nextjs"
+)
+
+type targetName string
+
+const (
+	targetDO  targetName = "do"
+	targetAWS targetName = "aws"
+)
+
+type outputTypeName string
+
+const (
+	outputTypeStatic outputTypeName = "static"
+)
+
 // Config represents the MVPBridge project configuration
 type Config struct {
 	Version   int    `yaml:"version"`
@@ -78,9 +98,11 @@ func (c *Config) Save(root string) error {
 
 // NewFromDetection creates a config from detection results
 func NewFromDetection(d *detect.Detection, target string) *Config {
+	framework := frameworkFromDetect(d.Framework)
+
 	cfg := &Config{
 		Version:   1,
-		Framework: string(d.Framework),
+		Framework: string(framework),
 		Target:    target,
 	}
 
@@ -103,14 +125,12 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("framework not set")
 	}
 
-	validFrameworks := map[string]bool{"vite": true, "nextjs": true}
-	if !validFrameworks[c.Framework] {
+	if _, ok := parseFrameworkName(c.Framework); !ok {
 		return fmt.Errorf("unsupported framework: %s", c.Framework)
 	}
 
 	if c.Target != "" {
-		validTargets := map[string]bool{"do": true, "aws": true}
-		if !validTargets[c.Target] {
+		if _, ok := parseTargetName(c.Target); !ok {
 			return fmt.Errorf("unsupported target: %s", c.Target)
 		}
 	}
@@ -120,18 +140,47 @@ func (c *Config) Validate() error {
 
 // IsStatic returns true if the project outputs static files
 func (c *Config) IsStatic() bool {
-	return c.Detected.OutputType == "static"
+	return outputTypeName(c.Detected.OutputType) == outputTypeStatic
 }
 
 // GetFramework returns the framework as a detect.Framework type
 func (c *Config) GetFramework() detect.Framework {
-	switch c.Framework {
-	case "vite":
+	switch frameworkName(c.Framework) {
+	case frameworkVite:
 		return detect.Vite
-	case "nextjs":
+	case frameworkNextJS:
 		return detect.NextJS
 	default:
 		return detect.Unknown
+	}
+}
+
+func parseFrameworkName(value string) (frameworkName, bool) {
+	switch frameworkName(value) {
+	case frameworkVite, frameworkNextJS:
+		return frameworkName(value), true
+	default:
+		return "", false
+	}
+}
+
+func parseTargetName(value string) (targetName, bool) {
+	switch targetName(value) {
+	case targetDO, targetAWS:
+		return targetName(value), true
+	default:
+		return "", false
+	}
+}
+
+func frameworkFromDetect(fw detect.Framework) frameworkName {
+	switch fw {
+	case detect.Vite:
+		return frameworkVite
+	case detect.NextJS:
+		return frameworkNextJS
+	default:
+		return frameworkName(fw)
 	}
 }
 
