@@ -4,100 +4,109 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/daryllundy/mvp-bridge)](https://goreportcard.com/report/github.com/daryllundy/mvp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Bridge your MVP to production.**
+MVPBridge is a single-binary CLI for taking a frontend repo from "works locally" to "deployable with reversible changes."
 
-MVPBridge is a single-binary CLI tool that inspects, normalizes, and deploys your frontend projects. No hosted dependencies. No daemons. No accounts.
-
-```
-Your MVP works locally.
-MVPBridge makes it work everywhere else.
-```
-
-## Project Status
-
-- `v0.x` active development
-- Supports Vite and Next.js (static + SSR detection paths)
-- Supports deployment to DigitalOcean App Platform, AWS Amplify, Google Cloud Run, and Azure Container Apps
-- Release artifacts are published on GitHub Releases
-
-## Quick Start
+It inspects a project, applies opinionated normalization steps as atomic git commits, and deploys to a supported cloud target using your existing credentials.
 
 ```bash
-# Install:
 go install github.com/daryllundy/mvp-bridge@latest
 
-# In your project directory
 mvpbridge init
 mvpbridge inspect
 mvpbridge normalize
 mvpbridge deploy do
 ```
 
-**Time to first deployment: ~10 minutes**
+## Project Status
 
-## What It Does
+- Active early-stage project (`v0.1.x` line of development)
+- Current CLI commands: `init`, `inspect`, `normalize`, `deploy [do|aws|gcp|azure]`
+- Framework support today: Vite and Next.js
+- Primary deploy path: DigitalOcean App Platform
+- Additional supported targets: AWS Amplify, Google Cloud Run, Azure Container Apps
+- Current test suite passes with `go test ./...`
 
-| Command | Action |
-|---------|--------|
-| `init` | Detects your framework, creates config |
-| `inspect` | Analyzes repo, reports what needs fixing |
-| `normalize` | Adds Dockerfile, CI/CD, pins versions |
-| `deploy do` | Ships to DigitalOcean App Platform |
-| `deploy aws` | Ships to AWS Amplify |
-| `deploy gcp` | Ships to Google Cloud Run |
-| `deploy azure` | Ships to Azure Container Apps |
+## Why Builders May Care
 
-## Supported Frameworks
+- Reversible by default: each normalization step becomes its own `[mvpbridge] ...` git commit
+- Uses the repo and cloud credentials you already have
+- No hosted control plane, daemon, or account system
+- Useful when a side project or MVP needs to become deployable without introducing a lot of tooling
 
-- ✅ **Vite + React** (primary)
-- ✅ **Next.js** (static export + SSR)
+## What Happens When You Run It
 
-## Supported Platforms
+1. `init` detects the framework and creates `.mvpbridge/config.yaml`
+2. `inspect` reports deployment readiness, build details, and obvious gaps
+3. `normalize` adds the missing deployment scaffolding as atomic commits
+4. `deploy <target>` pushes the normalized repo to a supported cloud target
 
-- ✅ **DigitalOcean App Platform**
-- ✅ **AWS Amplify**
-- ✅ **Google Cloud Run**
-- ✅ **Azure Container Apps**
+## Quick Start
 
-## Philosophy
-
-MVPBridge is deliberately simple:
-
-- **Single binary** — No runtime, no dependencies
-- **No daemon** — Runs when you need it, exits cleanly
-- **No accounts** — Uses your existing GitHub + cloud credentials
-- **Opinionated** — Fewer choices, faster results
-- **Reversible** — Every change is a git commit you can revert
-
-## Installation
-
-### From Source
-
-```bash
-git clone https://github.com/daryllundy/mvp-bridge
-cd mvp-bridge
-go build -o mvpbridge ./main.go
-```
-
-### Go Install
+### Install
 
 ```bash
 go install github.com/daryllundy/mvp-bridge@latest
 ```
 
-### Releases
-
-Download from [GitHub Releases](https://github.com/daryllundy/mvp-bridge/releases).
-
-## Usage
-
-### Initialize
+### Run the default workflow
 
 ```bash
 mvpbridge init
+mvpbridge inspect
+mvpbridge normalize
+export DIGITALOCEAN_TOKEN=your_token_here
+mvpbridge deploy do
 ```
 
-Creates `.mvpbridge/config.yaml` with detected settings:
+DigitalOcean is the clearest default path right now. AWS, GCP, and Azure are also supported if you want to use an existing cloud setup.
+
+## Current Capabilities
+
+### Detection
+
+MVPBridge currently detects:
+
+- Framework: Vite or Next.js
+- Package manager: npm, yarn, or pnpm
+- Node version from `.nvmrc` or `package.json`
+- Build command from `package.json`
+- Output type: static or SSR
+
+Framework detection prefers config files first:
+
+- `next.config.js|mjs|ts` -> Next.js
+- `vite.config.js|ts|mjs` -> Vite
+
+### Normalization
+
+`mvpbridge normalize` applies opinionated fixes only when they are missing.
+
+Current rules include:
+
+- Add `.nvmrc` pinned to Node `20`
+- Create `.env.example`
+- Update `.gitignore` with standard project entries
+- Add `.github/workflows/deploy.yml`
+- Add a production `Dockerfile`
+- Add `nginx.conf` for Vite projects
+
+Each applied rule is committed separately so you can inspect or revert it with normal git workflows.
+
+### Deployment Targets
+
+Primary path:
+
+- DigitalOcean App Platform via `mvpbridge deploy do`
+
+Also supported:
+
+- AWS Amplify via `mvpbridge deploy aws`
+- Google Cloud Run via `mvpbridge deploy gcp`
+- Azure Container Apps via `mvpbridge deploy azure`
+
+## Example Config
+
+`mvpbridge init` creates `.mvpbridge/config.yaml` based on detection results.
 
 ```yaml
 version: 1
@@ -107,216 +116,148 @@ detected:
   package_manager: npm
   build_command: npm run build
   output_dir: dist
+  node_version: "20"
+  output_type: static
+deploy:
+  app_name: my-app
+  region: nyc
 ```
 
-### Inspect
+The exact detected values depend on the repo. Additional deploy settings such as `project_id`, `subscription_id`, `resource_group`, and `environment` are used for GCP and Azure flows when needed.
+
+## Installation
+
+### Go Install
+
+```bash
+go install github.com/daryllundy/mvp-bridge@latest
+```
+
+### Build From Source
+
+```bash
+git clone https://github.com/daryllundy/mvp-bridge
+cd mvp-bridge
+go build -o mvpbridge ./main.go
+```
+
+### Run Tests
+
+```bash
+go test ./...
+```
+
+## Usage
+
+### `mvpbridge init`
+
+Initializes MVPBridge in the current repo:
+
+```bash
+mvpbridge init
+```
+
+Optional flags:
+
+- `--target`, `-t`: `do`, `aws`, `gcp`, `azure`
+- `--framework`, `-f`: `vite`, `nextjs`
+
+If no target is provided, MVPBridge defaults to `do`.
+
+### `mvpbridge inspect`
+
+Runs read-only detection and prints a deployment-readiness report:
 
 ```bash
 mvpbridge inspect
 ```
 
-Shows deployment readiness:
+Typical output includes:
 
-```
-╭─────────────────────────────────────────────────╮
-│  MVPBridge Inspection Report                    │
-├─────────────────────────────────────────────────┤
-│  Framework:     Vite + React                    │
-│  Node:          20.11.0 (pinned)                │
-│  Package Mgr:   npm                             │
-│  Build:         npm run build → dist/           │
-├─────────────────────────────────────────────────┤
-│  Deployment Readiness: 2 issues found           │
-│                                                 │
-│  ✗ Missing Dockerfile                           │
-│  ✗ No GitHub Actions workflow                   │
-│                                                 │
-│  Run `mvpbridge normalize` to fix these.        │
-╰─────────────────────────────────────────────────╯
-```
+- framework
+- package manager
+- pinned Node version
+- build command and output directory
+- output type
+- missing deployment artifacts
 
-### Normalize
+### `mvpbridge normalize`
+
+Applies missing normalization rules and creates git commits:
 
 ```bash
 mvpbridge normalize
 ```
 
-Applies fixes as atomic git commits:
+Useful flags:
 
-```
-[1/5] Adding .nvmrc
-      → Committed: [mvpbridge] Pin Node version to 20
+- `--dry-run`: preview the steps without editing files
+- `--yes`, `-y`: skip confirmation prompts
 
-[2/5] Adding Dockerfile
-      → Committed: [mvpbridge] Add production Dockerfile
+### `mvpbridge deploy`
 
-[3/5] Adding nginx.conf
-      → Committed: [mvpbridge] Add nginx.conf for SPA routing
-```
-
-Use `--dry-run` to preview changes without applying.
-
-### Deploy
-
-#### To DigitalOcean:
+Deploy to a supported target:
 
 ```bash
-export DIGITALOCEAN_TOKEN=your_token_here
 mvpbridge deploy do
-```
-
-#### To AWS Amplify:
-
-```bash
-export AWS_ACCESS_KEY_ID=your_access_key
-export AWS_SECRET_ACCESS_KEY=your_secret_key
-export GITHUB_TOKEN=your_github_token
 mvpbridge deploy aws
-```
-
-#### To Google Cloud Run:
-
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
-export GCP_PROJECT_ID=your-gcp-project
 mvpbridge deploy gcp
-```
-
-#### To Azure Container Apps:
-
-```bash
-az login
 mvpbridge deploy azure
 ```
 
-Creates/updates an app and triggers deployment:
-
-```
-Deploying to DigitalOcean...
-
-[1/4] Validating credentials... ✓
-[2/4] Creating app spec... ✓
-[3/4] Configuring secrets... ✓
-[4/4] Triggering deployment... ✓
-
-Deployment started!
-  App URL: https://your-app-xxxxx.ondigitalocean.app
-  Dashboard: https://cloud.digitalocean.com/apps/xxxxx
-```
-
-For detailed AWS setup instructions, see [AWS_DEPLOYMENT.md](./docs/AWS_DEPLOYMENT.md)
-For detailed GCP setup instructions, see [GCP_DEPLOYMENT.md](./docs/GCP_DEPLOYMENT.md)
-For detailed Azure setup instructions, see [AZURE_DEPLOYMENT.md](./docs/AZURE_DEPLOYMENT.md)
-
 ## Environment Variables
 
-| Variable | Required For | Description |
-|----------|--------------|-------------|
-| `DIGITALOCEAN_TOKEN` | DO deploy | API token from DO dashboard |
-| `AWS_ACCESS_KEY_ID` | AWS deploy | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | AWS deploy | AWS secret key |
-| `GITHUB_TOKEN` | AWS deploy | GitHub personal access token |
-| `AWS_REGION` | AWS deploy (optional) | AWS region (defaults to us-east-1) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | GCP deploy | Path to a GCP service account JSON file |
-| `GCP_PROJECT_ID` | GCP deploy | Google Cloud project ID |
+### DigitalOcean
 
-## How It Works
+- `DIGITALOCEAN_TOKEN`
 
-### Detection
+### AWS Amplify
 
-MVPBridge identifies your framework by checking for config files:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `GITHUB_TOKEN`
+- `AWS_REGION` optional, defaults to `us-east-1`
 
-- `vite.config.js/ts` → Vite
-- `next.config.js/mjs/ts` → Next.js
+### Google Cloud Run
 
-It also detects:
-- Package manager (npm/yarn/pnpm)
-- Node version (from `.nvmrc` or `package.json`)
-- Output type (static vs SSR)
+- `GOOGLE_APPLICATION_CREDENTIALS`
+- `GCP_PROJECT_ID`
 
-### Normalization
+Config default region if unset: `us-central1`
 
-Each fix is a separate git commit prefixed with `[mvpbridge]`:
+### Azure Container Apps
 
-1. **Node version pinning** — Creates `.nvmrc` and updates `package.json`
-2. **Dockerfile** — Adds multi-stage build optimized for your framework
-3. **nginx.conf** — For static sites, handles SPA routing
-4. **.env.example** — Documents required env vars
-5. **GitHub Actions** — Adds deployment workflow
+- Azure CLI login via `az login`
 
-### Deployment
+Config default region if unset: `eastus`
 
-For DigitalOcean:
-1. Generates App Spec from your config
-2. Creates or updates the App via API
-3. Sets environment variables as secrets
-4. Triggers deployment from your GitHub repo
+For provider-specific setup details:
 
-For AWS Amplify:
-1. Creates or updates the Amplify app
-2. Configures build settings and env vars
-3. Connects the GitHub repo for managed deployments
+- [AWS deployment guide](./docs/AWS_DEPLOYMENT.md)
+- [GCP deployment guide](./docs/GCP_DEPLOYMENT.md)
+- [Azure deployment guide](./docs/AZURE_DEPLOYMENT.md)
+- [CI/CD guide](./docs/CI_CD.md)
 
-For Google Cloud Run:
-1. Uses your normalized Dockerfile and local source
-2. Deploys with `gcloud run deploy --source .`
-3. Configures env vars on the Cloud Run service
+## Philosophy
 
-For Azure Container Apps:
-1. Uses your normalized Dockerfile and local source
-2. Deploys with `az containerapp up --source .`
-3. Configures env vars with `az containerapp update --set-env-vars`
+MVPBridge is intentionally opinionated:
 
-## FAQ
+- single binary
+- no daemon
+- no hosted dependency for the tool itself
+- repo-first workflow
+- git-based reversibility over hidden automation
 
-**Why Go?**
+## Current Limitations
 
-Single static binary. No Node runtime, no Python deps. Fast startup. Serious infra tools (Terraform, Docker CLI) use Go.
+- Framework support is currently limited to Vite and Next.js
+- Normalization is intentionally opinionated, not a general-purpose scaffolding engine
+- The platform matrix is broader than the level of polish on every deploy path
+- The tool assumes a git-based workflow and is most useful when your repo is already buildable locally
 
-**Why not just use Vercel/Netlify?**
+## Readability Suggestions For Future README Iterations
 
-You should! But some teams need:
-- Self-hosted infrastructure
-- Specific cloud providers
-- More control over the deployment process
-
-**Can I customize the templates?**
-
-Not yet. Opinionated defaults first, customization later.
-
-**Does this work with monorepos?**
-
-Not yet. Single-app repos only for v1.
-
-## Testing
-
-MVPBridge includes tests across detection, deploy, config, and normalization packages:
-
-```bash
-# Run all tests
-go test ./...
-
-# Run with verbose output
-go test ./... -v
-
-# Run with coverage
-go test ./... -cover
-
-# Run specific package
-go test ./internal/deploy -v
-```
-
-See [TESTING.md](./docs/TESTING.md) for detailed testing documentation.
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch
-3. Make your changes
-4. Write tests: See [TESTING.md](./docs/TESTING.md)
-5. Run tests: `go test ./...`
-6. Submit a PR
-
-## License
-
-MIT
+- Add one short real-world walkthrough using a sample Vite repo once the command outputs settle
+- Include a compact architecture diagram only if it helps explain detection -> normalization -> deploy
+- Add a small comparison table against "manual setup" only if it stays factual and restrained
+- Keep the front page focused on the default path and move cloud-specific depth into `docs/`
