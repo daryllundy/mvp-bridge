@@ -34,6 +34,7 @@ const (
 	targetAWS   targetName = "aws"
 	targetGCP   targetName = "gcp"
 	targetAzure targetName = "azure"
+	targetLocal targetName = "local"
 )
 
 type outputTypeName string
@@ -172,7 +173,7 @@ func parseFrameworkName(value string) (frameworkName, bool) {
 
 func parseTargetName(value string) (targetName, bool) {
 	switch targetName(value) {
-	case targetDO, targetAWS, targetGCP, targetAzure:
+	case targetDO, targetAWS, targetGCP, targetAzure, targetLocal:
 		return targetName(value), true
 	default:
 		return "", false

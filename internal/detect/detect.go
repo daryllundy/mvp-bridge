@@ -6,6 +6,7 @@ package detect
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -62,6 +63,24 @@ type Issue struct {
 	Code        string
 	Description string
 	Fixable     bool
+}
+
+// PersistenceKind describes the best-effort persistence backend inferred from the repo.
+type PersistenceKind string
+
+const (
+	// PersistenceNone means no persistence backend was confidently inferred.
+	PersistenceNone PersistenceKind = "none"
+	// PersistencePostgres means the repo appears to use PostgreSQL.
+	PersistencePostgres PersistenceKind = "postgres"
+	// PersistenceSQLite means the repo appears to use SQLite.
+	PersistenceSQLite PersistenceKind = "sqlite"
+)
+
+// Persistence stores the inferred persistence backend and why it was chosen.
+type Persistence struct {
+	Kind   PersistenceKind
+	Reason string
 }
 
 type packageJSON struct {
@@ -261,6 +280,124 @@ func detectBuildConfig(scan *scanContext, fw Framework) (buildCmd, outputDir str
 	}
 
 	return buildCmd, outputDir
+}
+
+// DetectPersistence infers whether the current repo expects PostgreSQL or SQLite.
+func DetectPersistence(root string) Persistence {
+	scan := newScanContext(root)
+	postScore := 0
+	sqliteScore := 0
+	var reasons []string
+
+	pkg, err := scan.readPackageJSON()
+	if err == nil {
+		postDeps := []string{"pg", "postgres", "@neondatabase/serverless", "postgresql", "pg-pool"}
+		sqliteDeps := []string{"sqlite3", "better-sqlite3", "@libsql/client", "sql.js"}
+
+		for _, dep := range postDeps {
+			if hasDependency(pkg, dep) {
+				postScore += 2
+				reasons = append(reasons, "dependency:"+dep)
+			}
+		}
+		for _, dep := range sqliteDeps {
+			if hasDependency(pkg, dep) {
+				sqliteScore += 2
+				reasons = append(reasons, "dependency:"+dep)
+			}
+		}
+	}
+
+	for _, rel := range likelyPersistenceFiles(root) {
+		data, err := scan.readFile(rel)
+		if err != nil {
+			continue
+		}
+		content := strings.ToLower(string(data))
+
+		if strings.Contains(content, `provider = "postgresql"`) ||
+			strings.Contains(content, "postgresql://") ||
+			strings.Contains(content, "postgres://") ||
+			strings.Contains(content, "pg_host") ||
+			strings.Contains(content, "postgres_user") {
+			postScore += 2
+			reasons = append(reasons, rel)
+		}
+
+		if strings.Contains(content, `provider = "sqlite"`) ||
+			strings.Contains(content, ".sqlite") ||
+			strings.Contains(content, ".db") ||
+			strings.Contains(content, "file:./") ||
+			strings.Contains(content, "better-sqlite3") {
+			sqliteScore += 2
+			reasons = append(reasons, rel)
+		}
+
+		if strings.Contains(content, "database_url") || strings.Contains(content, "pghost") || strings.Contains(content, "postgres_") {
+			postScore++
+		}
+	}
+
+	switch {
+	case postScore >= 2 && postScore > sqliteScore:
+		return Persistence{Kind: PersistencePostgres, Reason: strings.Join(reasons, ", ")}
+	case sqliteScore >= 2 && sqliteScore > postScore:
+		return Persistence{Kind: PersistenceSQLite, Reason: strings.Join(reasons, ", ")}
+	default:
+		return Persistence{Kind: PersistenceNone}
+	}
+}
+
+func hasDependency(pkg *packageJSON, name string) bool {
+	if pkg == nil {
+		return false
+	}
+	if _, ok := pkg.Dependencies[name]; ok {
+		return true
+	}
+	if _, ok := pkg.DevDependencies[name]; ok {
+		return true
+	}
+	return false
+}
+
+func likelyPersistenceFiles(root string) []string {
+	paths := []string{".env", ".env.example", "prisma/schema.prisma", "knexfile.js", "knexfile.ts", "drizzle.config.js", "drizzle.config.ts"}
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		seen[path] = struct{}{}
+	}
+
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", "node_modules", "dist", ".next", "out", "local-deploy":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		name := d.Name()
+		switch name {
+		case ".env", ".env.example", "schema.prisma", "knexfile.js", "knexfile.ts", "drizzle.config.js", "drizzle.config.ts":
+			rel, relErr := filepath.Rel(root, path)
+			if relErr == nil {
+				rel = filepath.ToSlash(rel)
+				if _, ok := seen[rel]; !ok {
+					seen[rel] = struct{}{}
+					paths = append(paths, rel)
+				}
+			}
+		}
+
+		return nil
+	})
+
+	return paths
 }
 
 // DetectOutputType determines if output is static or SSR

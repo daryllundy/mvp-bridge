@@ -10,6 +10,7 @@ import (
 
 	"github.com/daryllundy/mvp-bridge/internal/config"
 	"github.com/daryllundy/mvp-bridge/internal/deploy"
+	"github.com/daryllundy/mvp-bridge/internal/detect"
 )
 
 func TestNormalizeGitHubRemoteURL(t *testing.T) {
@@ -190,8 +191,72 @@ func TestRunDeployUnknownTargetListsAzure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown target")
 	}
-	if !strings.Contains(err.Error(), "supported: do, aws, gcp, azure") {
+	if !strings.Contains(err.Error(), "supported: do, aws, gcp, azure, local") {
 		t.Fatalf("expected error to list azure support, got %q", err.Error())
+	}
+}
+
+func TestDeployLocalDispatchesToGenerator(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalGenerator := generateLocalWorkspaceFunc
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		generateLocalWorkspaceFunc = originalGenerator
+	})
+
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".mvpbridge")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("version: 1\nframework: vite\ntarget: local\ndetected:\n  output_type: static\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"scripts":{"build":"npm run build"},"devDependencies":{"vite":"^5.0.0"}}`), 0o644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "vite.config.js"), []byte("export default {}"), 0o644); err != nil {
+		t.Fatalf("write vite config: %v", err)
+	}
+
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(originalWD) })
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+
+	prepareDeployFunc = func(cfg *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/repo",
+			AppName: deriveAppName(cfg.Deploy.AppName, "https://github.com/acme/repo"),
+			EnvVars: map[string]string{"API_URL": "https://example.com"},
+		}, nil
+	}
+
+	var gotOpts deploy.LocalWorkspaceOptions
+	generateLocalWorkspaceFunc = func(opts deploy.LocalWorkspaceOptions) (*deploy.LocalWorkspaceResult, error) {
+		gotOpts = opts
+		return &deploy.LocalWorkspaceResult{
+			OutputDir:   filepath.Join(tmpDir, "local-deploy"),
+			Persistence: detect.Persistence{Kind: detect.PersistenceNone},
+		}, nil
+	}
+
+	if err := runDeploy("local"); err != nil {
+		t.Fatalf("runDeploy local returned error: %v", err)
+	}
+
+	if gotOpts.Framework != detect.Vite {
+		t.Fatalf("expected Vite framework, got %s", gotOpts.Framework)
+	}
+	if gotOpts.OutputType != detect.Static {
+		t.Fatalf("expected static output type, got %s", gotOpts.OutputType)
+	}
+	if gotOpts.BuildCommand != "npm run build" {
+		t.Fatalf("expected build command to be forwarded, got %q", gotOpts.BuildCommand)
 	}
 }
 

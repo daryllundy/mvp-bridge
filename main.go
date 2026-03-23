@@ -35,6 +35,7 @@ var (
 	newAzureDeployerFunc = func(appName, resourceGroup, environment, region, subscriptionID string) (azureDeployer, error) {
 		return deploy.NewAzureDeployer(appName, resourceGroup, environment, region, subscriptionID)
 	}
+	generateLocalWorkspaceFunc = deploy.GenerateLocalWorkspace
 )
 
 func main() {
@@ -71,7 +72,7 @@ func initCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&target, "target", "t", "", "Deployment target (do, aws, gcp, azure)")
+	cmd.Flags().StringVarP(&target, "target", "t", "", "Deployment target (do, aws, gcp, azure, local)")
 	cmd.Flags().StringVarP(&framework, "framework", "f", "", "Framework (vite, nextjs)")
 
 	return cmd
@@ -111,7 +112,7 @@ func deployCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy [target]",
 		Short: "Deploy to target platform",
-		Long:  `Deploys your application to the specified platform (do for DigitalOcean, aws for AWS, gcp for Google Cloud Run, azure for Azure Container Apps).`,
+		Long:  `Deploys your application to the specified platform (do for DigitalOcean, aws for AWS, gcp for Google Cloud Run, azure for Azure Container Apps, local for Docker Compose workspace generation).`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runDeploy(args[0])
@@ -310,8 +311,10 @@ func runDeploy(target string) error {
 		return deployGCP(cfg)
 	case "azure":
 		return deployAzure(cfg)
+	case "local":
+		return deployLocal(cfg)
 	default:
-		return fmt.Errorf("unknown target: %s (supported: do, aws, gcp, azure)", target)
+		return fmt.Errorf("unknown target: %s (supported: do, aws, gcp, azure, local)", target)
 	}
 }
 
@@ -656,6 +659,60 @@ func deployAzure(cfg *config.Config) error {
 	if result.ConsoleURL != "" {
 		fmt.Printf("  Console: %s\n", result.ConsoleURL)
 	}
+
+	return nil
+}
+
+func deployLocal(cfg *config.Config) error {
+	fmt.Println("Generating local Docker Compose workspace...")
+	fmt.Println()
+
+	prep, err := prepareDeployFunc(cfg)
+	if err != nil {
+		return err
+	}
+
+	d, err := detect.DetectAll(".")
+	if err != nil {
+		return fmt.Errorf("detecting project: %w", err)
+	}
+
+	buildCommand := d.BuildCommand
+	if buildCommand == "" {
+		buildCommand = "npm run build"
+	}
+
+	outputDir := d.OutputDir
+	if outputDir == "" {
+		outputDir = "dist"
+	}
+
+	fmt.Println("[1/4] Inspecting project shape... ✓")
+	fmt.Println("[2/4] Inferring local persistence... ✓")
+
+	result, err := generateLocalWorkspaceFunc(deploy.LocalWorkspaceOptions{
+		Root:           ".",
+		AppName:        prep.AppName,
+		Framework:      d.Framework,
+		OutputType:     d.OutputType,
+		PackageManager: d.PackageManager,
+		BuildCommand:   buildCommand,
+		OutputDir:      outputDir,
+		EnvVars:        prep.EnvVars,
+	})
+	if err != nil {
+		return fmt.Errorf("local deploy generation failed: %w", err)
+	}
+
+	fmt.Println("[3/4] Copying application snapshot... ✓")
+	fmt.Println("[4/4] Writing Compose assets... ✓")
+	fmt.Println()
+	fmt.Printf("Local workspace created: %s\n", result.OutputDir)
+	if result.Persistence.Kind != "" && result.Persistence.Kind != detect.PersistenceNone {
+		fmt.Printf("  Persistence: %s\n", result.Persistence.Kind)
+	}
+	fmt.Println("  Run: docker compose up --build")
+	fmt.Println("  Dev: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build")
 
 	return nil
 }
