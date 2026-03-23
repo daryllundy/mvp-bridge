@@ -17,7 +17,7 @@ MVPBridge makes it work everywhere else.
 
 - `v0.x` active development
 - Supports Vite and Next.js (static + SSR detection paths)
-- Supports deployment to DigitalOcean App Platform, AWS Amplify, and Google Cloud Run
+- Supports deployment to DigitalOcean App Platform, AWS Amplify, Google Cloud Run, and Azure Container Apps
 - Release artifacts are published on GitHub Releases
 
 ## Quick Start
@@ -45,6 +45,7 @@ mvpbridge deploy do
 | `deploy do` | Ships to DigitalOcean App Platform |
 | `deploy aws` | Ships to AWS Amplify |
 | `deploy gcp` | Ships to Google Cloud Run |
+| `deploy azure` | Ships to Azure Container Apps |
 
 ## Supported Frameworks
 
@@ -56,6 +57,7 @@ mvpbridge deploy do
 - ✅ **DigitalOcean App Platform**
 - ✅ **AWS Amplify**
 - ✅ **Google Cloud Run**
+- ✅ **Azure Container Apps**
 
 ## Philosophy
 
@@ -180,6 +182,13 @@ export GCP_PROJECT_ID=your-gcp-project
 mvpbridge deploy gcp
 ```
 
+#### To Azure Container Apps:
+
+```bash
+az login
+mvpbridge deploy azure
+```
+
 Creates/updates an app and triggers deployment:
 
 ```
@@ -197,6 +206,7 @@ Deployment started!
 
 For detailed AWS setup instructions, see [AWS_DEPLOYMENT.md](./docs/AWS_DEPLOYMENT.md)
 For detailed GCP setup instructions, see [GCP_DEPLOYMENT.md](./docs/GCP_DEPLOYMENT.md)
+For detailed Azure setup instructions, see [AZURE_DEPLOYMENT.md](./docs/AZURE_DEPLOYMENT.md)
 
 ## Environment Variables
 
@@ -251,6 +261,11 @@ For Google Cloud Run:
 1. Uses your normalized Dockerfile and local source
 2. Deploys with `gcloud run deploy --source .`
 3. Configures env vars on the Cloud Run service
+
+For Azure Container Apps:
+1. Uses your normalized Dockerfile and local source
+2. Deploys with `az containerapp up --source .`
+3. Configures env vars with `az containerapp update --set-env-vars`
 
 ## FAQ
 

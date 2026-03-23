@@ -167,7 +167,7 @@ func TestExtractEnvVarsReadsCurrentDirectory(t *testing.T) {
 	}
 }
 
-func TestRunDeployUnknownTargetListsGCP(t *testing.T) {
+func TestRunDeployUnknownTargetListsAzure(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, ".mvpbridge")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
@@ -190,8 +190,8 @@ func TestRunDeployUnknownTargetListsGCP(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown target")
 	}
-	if !strings.Contains(err.Error(), "supported: do, aws, gcp") {
-		t.Fatalf("expected error to list gcp support, got %q", err.Error())
+	if !strings.Contains(err.Error(), "supported: do, aws, gcp, azure") {
+		t.Fatalf("expected error to list azure support, got %q", err.Error())
 	}
 }
 
@@ -200,6 +200,14 @@ type fakeGCPDeployer struct {
 }
 
 func (f fakeGCPDeployer) Deploy(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error) {
+	return f.deployFn(isStatic, envVars)
+}
+
+type fakeAzureDeployer struct {
+	deployFn func(isStatic bool, envVars map[string]string) (*deploy.AzureContainerAppResponse, error)
+}
+
+func (f fakeAzureDeployer) Deploy(isStatic bool, envVars map[string]string) (*deploy.AzureContainerAppResponse, error) {
 	return f.deployFn(isStatic, envVars)
 }
 
@@ -397,6 +405,218 @@ func TestDeployGCPSurfacesDeployFailure(t *testing.T) {
 		t.Fatal("expected deploy error")
 	}
 	if !strings.Contains(err.Error(), "deployment failed: gcloud failed") {
+		t.Fatalf("expected wrapped deploy error, got %q", err.Error())
+	}
+}
+
+func TestDeployAzureUsesExplicitConfigValues(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalConstructor := newAzureDeployerFunc
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		newAzureDeployerFunc = originalConstructor
+	})
+
+	cfg := &config.Config{
+		Version:   1,
+		Framework: "vite",
+		Target:    "azure",
+	}
+	cfg.Detected.OutputType = "static"
+	cfg.Deploy.AppName = "configured-name"
+	cfg.Deploy.SubscriptionID = "sub-001"
+	cfg.Deploy.ResourceGroup = "rg-configured"
+	cfg.Deploy.Environment = "env-configured"
+	cfg.Deploy.Region = "westus3"
+
+	prepareDeployFunc = func(cfg *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/repo",
+			AppName: deriveAppName(cfg.Deploy.AppName, "https://github.com/acme/repo"),
+			EnvVars: map[string]string{"TOKEN": "abc"},
+		}, nil
+	}
+
+	var gotAppName, gotRG, gotEnv, gotRegion, gotSub string
+	newAzureDeployerFunc = func(appName, resourceGroup, environment, region, subscriptionID string) (azureDeployer, error) {
+		gotAppName = appName
+		gotRG = resourceGroup
+		gotEnv = environment
+		gotRegion = region
+		gotSub = subscriptionID
+		return fakeAzureDeployer{
+			deployFn: func(isStatic bool, envVars map[string]string) (*deploy.AzureContainerAppResponse, error) {
+				if !isStatic {
+					t.Fatalf("expected static deployment")
+				}
+				if envVars["TOKEN"] != "abc" {
+					t.Fatalf("expected env vars to be forwarded, got %v", envVars)
+				}
+				var resp deploy.AzureContainerAppResponse
+				resp.App.URL = "https://configured-name.azurecontainerapps.io"
+				resp.ConsoleURL = "https://portal.azure.com/#@/resource/subscriptions/sub-001/resourceGroups/rg-configured/providers/Microsoft.App/containerApps/configured-name"
+				return &resp, nil
+			},
+		}, nil
+	}
+
+	output := captureStdout(t, func() {
+		if err := deployAzure(cfg); err != nil {
+			t.Fatalf("deployAzure returned error: %v", err)
+		}
+	})
+
+	if gotAppName != "configured-name" {
+		t.Fatalf("expected configured app name, got %q", gotAppName)
+	}
+	if gotRG != "rg-configured" {
+		t.Fatalf("expected configured resource group, got %q", gotRG)
+	}
+	if gotEnv != "env-configured" {
+		t.Fatalf("expected configured environment, got %q", gotEnv)
+	}
+	if gotRegion != "westus3" {
+		t.Fatalf("expected configured region, got %q", gotRegion)
+	}
+	if gotSub != "sub-001" {
+		t.Fatalf("expected configured subscription, got %q", gotSub)
+	}
+	if !strings.Contains(output, "App URL: https://configured-name.azurecontainerapps.io") {
+		t.Fatalf("expected app URL in output, got %q", output)
+	}
+	if !strings.Contains(output, "Console: https://portal.azure.com/#@/resource/subscriptions/sub-001/resourceGroups/rg-configured/providers/Microsoft.App/containerApps/configured-name") {
+		t.Fatalf("expected console URL in output, got %q", output)
+	}
+}
+
+func TestDeployAzureUsesDefaultRegionAndDerivedAppName(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalConstructor := newAzureDeployerFunc
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		newAzureDeployerFunc = originalConstructor
+	})
+
+	cfg := &config.Config{
+		Version:   1,
+		Framework: "nextjs",
+		Target:    "azure",
+	}
+	cfg.Detected.OutputType = "ssr"
+
+	prepareDeployFunc = func(cfg *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/service",
+			AppName: deriveAppName(cfg.Deploy.AppName, "https://github.com/acme/service"),
+			EnvVars: map[string]string{},
+		}, nil
+	}
+
+	var gotAppName, gotRG, gotEnv, gotRegion, gotSub string
+	newAzureDeployerFunc = func(appName, resourceGroup, environment, region, subscriptionID string) (azureDeployer, error) {
+		gotAppName = appName
+		gotRG = resourceGroup
+		gotEnv = environment
+		gotRegion = region
+		gotSub = subscriptionID
+		return fakeAzureDeployer{
+			deployFn: func(isStatic bool, envVars map[string]string) (*deploy.AzureContainerAppResponse, error) {
+				if isStatic {
+					t.Fatalf("expected SSR deployment")
+				}
+				var resp deploy.AzureContainerAppResponse
+				resp.App.URL = "https://service.azurecontainerapps.io"
+				resp.ConsoleURL = "https://portal.azure.com"
+				return &resp, nil
+			},
+		}, nil
+	}
+
+	if err := deployAzure(cfg); err != nil {
+		t.Fatalf("deployAzure returned error: %v", err)
+	}
+
+	if gotAppName != "service" {
+		t.Fatalf("expected derived app name from repo, got %q", gotAppName)
+	}
+	if gotRG != "" {
+		t.Fatalf("expected empty RG to allow deployer defaults, got %q", gotRG)
+	}
+	if gotEnv != "" {
+		t.Fatalf("expected empty environment to allow deployer defaults, got %q", gotEnv)
+	}
+	if gotRegion != "eastus" {
+		t.Fatalf("expected default region eastus, got %q", gotRegion)
+	}
+	if gotSub != "" {
+		t.Fatalf("expected empty subscription by default, got %q", gotSub)
+	}
+}
+
+func TestDeployAzureSurfacesConstructorFailure(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalConstructor := newAzureDeployerFunc
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		newAzureDeployerFunc = originalConstructor
+	})
+
+	cfg := &config.Config{Version: 1, Framework: "vite", Target: "azure"}
+	cfg.Detected.OutputType = "static"
+
+	prepareDeployFunc = func(_ *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/repo",
+			AppName: "repo",
+			EnvVars: map[string]string{},
+		}, nil
+	}
+
+	newAzureDeployerFunc = func(appName, resourceGroup, environment, region, subscriptionID string) (azureDeployer, error) {
+		return nil, fmt.Errorf("az login required")
+	}
+
+	err := deployAzure(cfg)
+	if err == nil {
+		t.Fatal("expected constructor error")
+	}
+	if !strings.Contains(err.Error(), "az login required") {
+		t.Fatalf("expected constructor error to surface, got %q", err.Error())
+	}
+}
+
+func TestDeployAzureSurfacesDeployFailure(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalConstructor := newAzureDeployerFunc
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		newAzureDeployerFunc = originalConstructor
+	})
+
+	cfg := &config.Config{Version: 1, Framework: "vite", Target: "azure"}
+	cfg.Detected.OutputType = "static"
+
+	prepareDeployFunc = func(_ *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/repo",
+			AppName: "repo",
+			EnvVars: map[string]string{"TOKEN": "abc"},
+		}, nil
+	}
+
+	newAzureDeployerFunc = func(appName, resourceGroup, environment, region, subscriptionID string) (azureDeployer, error) {
+		return fakeAzureDeployer{
+			deployFn: func(isStatic bool, envVars map[string]string) (*deploy.AzureContainerAppResponse, error) {
+				return nil, fmt.Errorf("azure deploy failed")
+			},
+		}, nil
+	}
+
+	err := deployAzure(cfg)
+	if err == nil {
+		t.Fatal("expected deploy error")
+	}
+	if !strings.Contains(err.Error(), "deployment failed: azure deploy failed") {
 		t.Fatalf("expected wrapped deploy error, got %q", err.Error())
 	}
 }

@@ -77,6 +77,34 @@ deploy:
 			},
 		},
 		{
+			name: "Azure config with deploy settings",
+			configYAML: `version: 1
+framework: vite
+target: azure
+deploy:
+  subscription_id: sub-123
+  resource_group: rg-app
+  environment: env-app
+  region: eastus
+`,
+			wantErr: false,
+			checkFunc: func(c *Config) error {
+				if c.Target != "azure" {
+					t.Errorf("Expected target azure, got %s", c.Target)
+				}
+				if c.Deploy.SubscriptionID != "sub-123" {
+					t.Errorf("Expected subscription sub-123, got %s", c.Deploy.SubscriptionID)
+				}
+				if c.Deploy.ResourceGroup != "rg-app" {
+					t.Errorf("Expected resource group rg-app, got %s", c.Deploy.ResourceGroup)
+				}
+				if c.Deploy.Environment != "env-app" {
+					t.Errorf("Expected environment env-app, got %s", c.Deploy.Environment)
+				}
+				return nil
+			},
+		},
+		{
 			name:       "Missing config",
 			configYAML: "",
 			wantErr:    true,
@@ -159,6 +187,14 @@ func TestSave(t *testing.T) {
 				Target:    "gcp",
 			},
 		},
+		{
+			name: "Save with Azure deploy settings",
+			config: &Config{
+				Version:   1,
+				Framework: "vite",
+				Target:    "azure",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -171,6 +207,12 @@ func TestSave(t *testing.T) {
 			if tt.config.Target == "gcp" {
 				tt.config.Deploy.ProjectID = "demo-project"
 				tt.config.Deploy.Region = "us-central1"
+			}
+			if tt.config.Target == "azure" {
+				tt.config.Deploy.SubscriptionID = "sub-123"
+				tt.config.Deploy.ResourceGroup = "rg-app"
+				tt.config.Deploy.Environment = "env-app"
+				tt.config.Deploy.Region = "eastus"
 			}
 
 			err := tt.config.Save(tmpDir)
@@ -201,6 +243,15 @@ func TestSave(t *testing.T) {
 			}
 			if loaded.Deploy.ProjectID != tt.config.Deploy.ProjectID {
 				t.Errorf("Expected project ID %s, got %s", tt.config.Deploy.ProjectID, loaded.Deploy.ProjectID)
+			}
+			if loaded.Deploy.SubscriptionID != tt.config.Deploy.SubscriptionID {
+				t.Errorf("Expected subscription ID %s, got %s", tt.config.Deploy.SubscriptionID, loaded.Deploy.SubscriptionID)
+			}
+			if loaded.Deploy.ResourceGroup != tt.config.Deploy.ResourceGroup {
+				t.Errorf("Expected resource group %s, got %s", tt.config.Deploy.ResourceGroup, loaded.Deploy.ResourceGroup)
+			}
+			if loaded.Deploy.Environment != tt.config.Deploy.Environment {
+				t.Errorf("Expected environment %s, got %s", tt.config.Deploy.Environment, loaded.Deploy.Environment)
 			}
 		})
 	}
@@ -262,6 +313,23 @@ func TestNewFromDetection(t *testing.T) {
 				Version:   1,
 				Framework: "vite",
 				Target:    "gcp",
+			},
+		},
+		{
+			name: "Azure target preserved",
+			detection: &detect.Detection{
+				Framework:      detect.Vite,
+				PackageManager: detect.PNPM,
+				NodeVersion:    "20",
+				BuildCommand:   "pnpm build",
+				OutputDir:      "dist",
+				OutputType:     detect.Static,
+			},
+			target: "azure",
+			expected: &Config{
+				Version:   1,
+				Framework: "vite",
+				Target:    "azure",
 			},
 		},
 	}
@@ -328,6 +396,15 @@ func TestValidate(t *testing.T) {
 				Version:   1,
 				Framework: "vite",
 				Target:    "gcp",
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid azure config",
+			config: &Config{
+				Version:   1,
+				Framework: "vite",
+				Target:    "azure",
 			},
 			wantErr: false,
 		},
