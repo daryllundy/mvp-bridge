@@ -46,6 +46,7 @@ func NewGCPDeployer(appName, projectID, region string) (*GCPDeployer, error) {
 	if credentialsFile == "" {
 		return nil, fmt.Errorf("GOOGLE_APPLICATION_CREDENTIALS environment variable must be set")
 	}
+	// #nosec G304,G703 -- credentials path is intentionally operator-supplied via environment variable.
 	if _, err := os.Stat(credentialsFile); err != nil {
 		return nil, fmt.Errorf("GOOGLE_APPLICATION_CREDENTIALS file not accessible: %w", err)
 	}
@@ -116,8 +117,18 @@ func (d *GCPDeployer) Deploy(isStatic bool, envVars map[string]string) (*CloudRu
 		if err != nil {
 			return nil, err
 		}
-		cleanup = func() error { return os.Remove(envFile) }
-		defer func() { _ = cleanup() }()
+		cleanup = func() error {
+			if err := os.Remove(envFile); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			return nil
+		}
+		defer func() {
+			// Best-effort cleanup; deployment result should not be masked by temp file removal.
+			if err := cleanup(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "warning: failed to remove temp env file: %v\n", err)
+			}
+		}()
 		args = append(args, "--env-vars-file", envFile)
 	}
 
@@ -239,6 +250,7 @@ func (d *GCPDeployer) run(ctx context.Context, workdir string, args ...string) (
 }
 
 func defaultGcloudRunner(ctx context.Context, workdir string, env []string, args ...string) ([]byte, error) {
+	// #nosec G204 -- command is fixed ("gcloud"), args are structured flags, and no shell is used.
 	cmd := exec.CommandContext(ctx, "gcloud", args...)
 	cmd.Dir = workdir
 	cmd.Env = append(os.Environ(), env...)
