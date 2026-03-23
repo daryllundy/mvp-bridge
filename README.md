@@ -17,7 +17,7 @@ MVPBridge makes it work everywhere else.
 
 - `v0.x` active development
 - Supports Vite and Next.js (static + SSR detection paths)
-- Supports deployment to DigitalOcean App Platform and AWS Amplify
+- Supports deployment to DigitalOcean App Platform, AWS Amplify, and Google Cloud Run
 - Release artifacts are published on GitHub Releases
 
 ## Quick Start
@@ -44,6 +44,7 @@ mvpbridge deploy do
 | `normalize` | Adds Dockerfile, CI/CD, pins versions |
 | `deploy do` | Ships to DigitalOcean App Platform |
 | `deploy aws` | Ships to AWS Amplify |
+| `deploy gcp` | Ships to Google Cloud Run |
 
 ## Supported Frameworks
 
@@ -54,6 +55,7 @@ mvpbridge deploy do
 
 - ✅ **DigitalOcean App Platform**
 - ✅ **AWS Amplify**
+- ✅ **Google Cloud Run**
 
 ## Philosophy
 
@@ -98,7 +100,7 @@ Creates `.mvpbridge/config.yaml` with detected settings:
 ```yaml
 version: 1
 framework: vite
-target: digitalocean
+target: do
 detected:
   package_manager: npm
   build_command: npm run build
@@ -170,6 +172,14 @@ export GITHUB_TOKEN=your_github_token
 mvpbridge deploy aws
 ```
 
+#### To Google Cloud Run:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+export GCP_PROJECT_ID=your-gcp-project
+mvpbridge deploy gcp
+```
+
 Creates/updates an app and triggers deployment:
 
 ```
@@ -186,6 +196,7 @@ Deployment started!
 ```
 
 For detailed AWS setup instructions, see [AWS_DEPLOYMENT.md](./docs/AWS_DEPLOYMENT.md)
+For detailed GCP setup instructions, see [GCP_DEPLOYMENT.md](./docs/GCP_DEPLOYMENT.md)
 
 ## Environment Variables
 
@@ -196,6 +207,8 @@ For detailed AWS setup instructions, see [AWS_DEPLOYMENT.md](./docs/AWS_DEPLOYME
 | `AWS_SECRET_ACCESS_KEY` | AWS deploy | AWS secret key |
 | `GITHUB_TOKEN` | AWS deploy | GitHub personal access token |
 | `AWS_REGION` | AWS deploy (optional) | AWS region (defaults to us-east-1) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | GCP deploy | Path to a GCP service account JSON file |
+| `GCP_PROJECT_ID` | GCP deploy | Google Cloud project ID |
 
 ## How It Works
 
@@ -228,6 +241,16 @@ For DigitalOcean:
 2. Creates or updates the App via API
 3. Sets environment variables as secrets
 4. Triggers deployment from your GitHub repo
+
+For AWS Amplify:
+1. Creates or updates the Amplify app
+2. Configures build settings and env vars
+3. Connects the GitHub repo for managed deployments
+
+For Google Cloud Run:
+1. Uses your normalized Dockerfile and local source
+2. Deploys with `gcloud run deploy --source .`
+3. Configures env vars on the Cloud Run service
 
 ## FAQ
 

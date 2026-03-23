@@ -3,6 +3,7 @@
 ## Active Docs
 
 - [AWS deployment guide](./AWS_DEPLOYMENT.md)
+- [GCP deployment guide](./GCP_DEPLOYMENT.md)
 - [CI/CD guide](./CI_CD.md)
 - [Product requirements](./PRD.md)
 - [Testing guide](./TESTING.md)

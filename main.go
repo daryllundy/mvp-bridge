@@ -19,6 +19,17 @@ import (
 
 var version = "0.1.0"
 
+type gcpDeployer interface {
+	Deploy(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error)
+}
+
+var (
+	prepareDeployFunc  = prepareDeploy
+	newGCPDeployerFunc = func(appName, projectID, region string) (gcpDeployer, error) {
+		return deploy.NewGCPDeployer(appName, projectID, region)
+	}
+)
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "mvpbridge",
@@ -53,7 +64,7 @@ func initCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&target, "target", "t", "", "Deployment target (do, aws)")
+	cmd.Flags().StringVarP(&target, "target", "t", "", "Deployment target (do, aws, gcp)")
 	cmd.Flags().StringVarP(&framework, "framework", "f", "", "Framework (vite, nextjs)")
 
 	return cmd
@@ -93,7 +104,7 @@ func deployCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy [target]",
 		Short: "Deploy to target platform",
-		Long:  `Deploys your application to the specified platform (do for DigitalOcean, aws for AWS).`,
+		Long:  `Deploys your application to the specified platform (do for DigitalOcean, aws for AWS, gcp for Google Cloud Run).`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runDeploy(args[0])
@@ -288,8 +299,10 @@ func runDeploy(target string) error {
 		return deployDigitalOcean(cfg)
 	case "aws":
 		return deployAWS(cfg)
+	case "gcp":
+		return deployGCP(cfg)
 	default:
-		return fmt.Errorf("unknown target: %s (supported: do, aws)", target)
+		return fmt.Errorf("unknown target: %s (supported: do, aws, gcp)", target)
 	}
 }
 
@@ -532,6 +545,56 @@ func deployAWS(cfg *config.Config) error {
 	if result.App.AppID != "" {
 		fmt.Printf("  Console: https://%s.console.aws.amazon.com/amplify/home?region=%s#/%s\n",
 			region, region, result.App.AppID)
+	}
+
+	return nil
+}
+
+func deployGCP(cfg *config.Config) error {
+	fmt.Println("Deploying to Google Cloud Run...")
+	fmt.Println()
+
+	prep, err := prepareDeployFunc(cfg)
+	if err != nil {
+		return err
+	}
+
+	projectID := cfg.Deploy.ProjectID
+	if projectID == "" {
+		projectID = os.Getenv("GCP_PROJECT_ID")
+	}
+
+	region := cfg.Deploy.Region
+	if region == "" {
+		region = "us-central1"
+	}
+
+	deployer, err := newGCPDeployerFunc(prep.AppName, projectID, region)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("[1/4] Validating credentials... ✓")
+	fmt.Println("[2/4] Preparing Cloud Run deployment... ✓")
+
+	isStatic := cfg.IsStatic()
+
+	fmt.Printf("[3/4] Configuring secrets (%d vars)... ✓\n", len(prep.EnvVars))
+
+	result, err := deployer.Deploy(isStatic, prep.EnvVars)
+	if err != nil {
+		return fmt.Errorf("deployment failed: %w", err)
+	}
+
+	fmt.Println("[4/4] Triggering deployment... ✓")
+	fmt.Println()
+	fmt.Println("Deployment started!")
+
+	if result.Service.URL != "" {
+		fmt.Printf("  App URL: %s\n", result.Service.URL)
+	}
+	if result.ConsoleURL != "" {
+		fmt.Printf("  Console: %s\n", result.ConsoleURL)
 	}
 
 	return nil

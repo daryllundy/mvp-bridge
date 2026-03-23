@@ -1,9 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/daryllundy/mvp-bridge/internal/config"
+	"github.com/daryllundy/mvp-bridge/internal/deploy"
 )
 
 func TestNormalizeGitHubRemoteURL(t *testing.T) {
@@ -159,4 +165,265 @@ func TestExtractEnvVarsReadsCurrentDirectory(t *testing.T) {
 	if vars["TOKEN"] != "abc" {
 		t.Fatalf("expected TOKEN=abc, got %q", vars["TOKEN"])
 	}
+}
+
+func TestRunDeployUnknownTargetListsGCP(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".mvpbridge")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("version: 1\nframework: vite\ntarget: do\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(originalWD) })
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+
+	err = runDeploy("heroku")
+	if err == nil {
+		t.Fatal("expected error for unknown target")
+	}
+	if !strings.Contains(err.Error(), "supported: do, aws, gcp") {
+		t.Fatalf("expected error to list gcp support, got %q", err.Error())
+	}
+}
+
+type fakeGCPDeployer struct {
+	deployFn func(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error)
+}
+
+func (f fakeGCPDeployer) Deploy(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error) {
+	return f.deployFn(isStatic, envVars)
+}
+
+func TestDeployGCPUsesExplicitConfigValues(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalConstructor := newGCPDeployerFunc
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		newGCPDeployerFunc = originalConstructor
+	})
+
+	cfg := &config.Config{
+		Version:   1,
+		Framework: "vite",
+		Target:    "gcp",
+	}
+	cfg.Detected.OutputType = "static"
+	cfg.Deploy.AppName = "configured-name"
+	cfg.Deploy.ProjectID = "cfg-project"
+	cfg.Deploy.Region = "us-west1"
+
+	prepareDeployFunc = func(cfg *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/repo",
+			AppName: deriveAppName(cfg.Deploy.AppName, "https://github.com/acme/repo"),
+			EnvVars: map[string]string{"TOKEN": "abc"},
+		}, nil
+	}
+
+	var gotAppName, gotProjectID, gotRegion string
+	newGCPDeployerFunc = func(appName, projectID, region string) (gcpDeployer, error) {
+		gotAppName = appName
+		gotProjectID = projectID
+		gotRegion = region
+		return fakeGCPDeployer{
+			deployFn: func(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error) {
+				if !isStatic {
+					t.Fatalf("expected static deployment")
+				}
+				if envVars["TOKEN"] != "abc" {
+					t.Fatalf("expected env vars to be forwarded, got %v", envVars)
+				}
+				var resp deploy.CloudRunServiceResponse
+				resp.Service.URL = "https://configured-name.a.run.app"
+				resp.ConsoleURL = "https://console.cloud.google.com/run/detail/us-west1/configured-name/metrics?project=cfg-project"
+				return &resp, nil
+			},
+		}, nil
+	}
+
+	output := captureStdout(t, func() {
+		if err := deployGCP(cfg); err != nil {
+			t.Fatalf("deployGCP returned error: %v", err)
+		}
+	})
+
+	if gotAppName != "configured-name" {
+		t.Fatalf("expected configured app name, got %q", gotAppName)
+	}
+	if gotProjectID != "cfg-project" {
+		t.Fatalf("expected config project ID, got %q", gotProjectID)
+	}
+	if gotRegion != "us-west1" {
+		t.Fatalf("expected config region, got %q", gotRegion)
+	}
+	if !strings.Contains(output, "App URL: https://configured-name.a.run.app") {
+		t.Fatalf("expected app URL in output, got %q", output)
+	}
+	if !strings.Contains(output, "Console: https://console.cloud.google.com/run/detail/us-west1/configured-name/metrics?project=cfg-project") {
+		t.Fatalf("expected console URL in output, got %q", output)
+	}
+}
+
+func TestDeployGCPUsesEnvFallbacks(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalConstructor := newGCPDeployerFunc
+	originalProjectEnv := os.Getenv("GCP_PROJECT_ID")
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		newGCPDeployerFunc = originalConstructor
+		_ = os.Setenv("GCP_PROJECT_ID", originalProjectEnv)
+	})
+
+	cfg := &config.Config{
+		Version:   1,
+		Framework: "nextjs",
+		Target:    "gcp",
+	}
+	cfg.Detected.OutputType = "ssr"
+	_ = os.Setenv("GCP_PROJECT_ID", "env-project")
+
+	prepareDeployFunc = func(cfg *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/service",
+			AppName: deriveAppName(cfg.Deploy.AppName, "https://github.com/acme/service"),
+			EnvVars: map[string]string{},
+		}, nil
+	}
+
+	var gotAppName, gotProjectID, gotRegion string
+	newGCPDeployerFunc = func(appName, projectID, region string) (gcpDeployer, error) {
+		gotAppName = appName
+		gotProjectID = projectID
+		gotRegion = region
+		return fakeGCPDeployer{
+			deployFn: func(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error) {
+				if isStatic {
+					t.Fatalf("expected SSR deployment")
+				}
+				var resp deploy.CloudRunServiceResponse
+				resp.Service.URL = "https://service.a.run.app"
+				resp.ConsoleURL = "https://console.cloud.google.com/run/detail/us-central1/service/metrics?project=env-project"
+				return &resp, nil
+			},
+		}, nil
+	}
+
+	if err := deployGCP(cfg); err != nil {
+		t.Fatalf("deployGCP returned error: %v", err)
+	}
+
+	if gotAppName != "service" {
+		t.Fatalf("expected derived app name from repo, got %q", gotAppName)
+	}
+	if gotProjectID != "env-project" {
+		t.Fatalf("expected env project ID, got %q", gotProjectID)
+	}
+	if gotRegion != "us-central1" {
+		t.Fatalf("expected default region, got %q", gotRegion)
+	}
+}
+
+func TestDeployGCPSurfacesConstructorFailure(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalConstructor := newGCPDeployerFunc
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		newGCPDeployerFunc = originalConstructor
+	})
+
+	cfg := &config.Config{Version: 1, Framework: "vite", Target: "gcp"}
+	cfg.Detected.OutputType = "static"
+
+	prepareDeployFunc = func(_ *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/repo",
+			AppName: "repo",
+			EnvVars: map[string]string{},
+		}, nil
+	}
+
+	newGCPDeployerFunc = func(appName, projectID, region string) (gcpDeployer, error) {
+		return nil, fmt.Errorf("missing project id")
+	}
+
+	err := deployGCP(cfg)
+	if err == nil {
+		t.Fatal("expected constructor error")
+	}
+	if !strings.Contains(err.Error(), "missing project id") {
+		t.Fatalf("expected constructor error to surface, got %q", err.Error())
+	}
+}
+
+func TestDeployGCPSurfacesDeployFailure(t *testing.T) {
+	originalPrepare := prepareDeployFunc
+	originalConstructor := newGCPDeployerFunc
+	t.Cleanup(func() {
+		prepareDeployFunc = originalPrepare
+		newGCPDeployerFunc = originalConstructor
+	})
+
+	cfg := &config.Config{Version: 1, Framework: "vite", Target: "gcp"}
+	cfg.Detected.OutputType = "static"
+	cfg.Deploy.ProjectID = "cfg-project"
+
+	prepareDeployFunc = func(_ *config.Config) (*deployPreparation, error) {
+		return &deployPreparation{
+			RepoURL: "https://github.com/acme/repo",
+			AppName: "repo",
+			EnvVars: map[string]string{"TOKEN": "abc"},
+		}, nil
+	}
+
+	newGCPDeployerFunc = func(appName, projectID, region string) (gcpDeployer, error) {
+		return fakeGCPDeployer{
+			deployFn: func(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error) {
+				return nil, fmt.Errorf("gcloud failed")
+			},
+		}, nil
+	}
+
+	err := deployGCP(cfg)
+	if err == nil {
+		t.Fatal("expected deploy error")
+	}
+	if !strings.Contains(err.Error(), "deployment failed: gcloud failed") {
+		t.Fatalf("expected wrapped deploy error, got %q", err.Error())
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	originalStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("creating pipe: %v", err)
+	}
+
+	os.Stdout = writer
+	defer func() {
+		os.Stdout = originalStdout
+	}()
+
+	fn()
+
+	_ = writer.Close()
+
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(reader); err != nil {
+		t.Fatalf("reading stdout: %v", err)
+	}
+	_ = reader.Close()
+
+	return buf.String()
 }
