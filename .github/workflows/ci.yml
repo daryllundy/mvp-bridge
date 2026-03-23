@@ -27,5 +27,46 @@ jobs:
     - name: Run tests
       run: go test ./...
 
-    - name: Build binary
-      run: go build -o mvpbridge ./main.go
+    - name: Test binary (Windows)
+      if: matrix.os == 'windows-latest'
+      run: .\mvpbridge.exe --version
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        args: --timeout=5m
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Run Gosec Security Scanner
+      uses: securego/gosec@v2.25.0
+      with:
+        args: -exclude=G704 ./...
