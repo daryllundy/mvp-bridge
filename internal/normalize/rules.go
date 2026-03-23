@@ -22,6 +22,32 @@ type Rule struct {
 	Apply       func(root string, dryRun bool) error
 }
 
+func newRule(name, description string, check func(root string) bool, apply func(root string) error) Rule {
+	return Rule{
+		Name:        name,
+		Description: description,
+		Check:       check,
+		Apply: func(root string, dryRun bool) error {
+			if dryRun {
+				return nil
+			}
+			return apply(root)
+		},
+	}
+}
+
+func filePresentCheck(relPath string) func(root string) bool {
+	return func(root string) bool {
+		return projectfs.Exists(filepath.Join(root, relPath))
+	}
+}
+
+func writeFileApply(relPath, content string) func(root string) error {
+	return func(root string) error {
+		return os.WriteFile(filepath.Join(root, relPath), []byte(content), 0600)
+	}
+}
+
 // Normalizer orchestrates the execution of normalization rules
 type Normalizer struct {
 	Root      string
@@ -88,56 +114,30 @@ func (n *Normalizer) Run() error {
 
 func universalRules() []Rule {
 	return []Rule{
-		{
-				Name:        "Pin Node version",
-				Description: "Pin Node version to 20",
-				Check: func(root string) bool {
-					return projectfs.Exists(filepath.Join(root, ".nvmrc"))
-				},
-			Apply: func(root string, dryRun bool) error {
-				if dryRun {
-					return nil
-				}
-				return os.WriteFile(filepath.Join(root, ".nvmrc"), []byte("20\n"), 0600)
-			},
-		},
-		{
-				Name:        "Add .env.example",
-				Description: "Add .env.example template",
-				Check: func(root string) bool {
-					return projectfs.Exists(filepath.Join(root, ".env.example"))
-				},
-			Apply: func(root string, dryRun bool) error {
-				if dryRun {
-					return nil
-				}
-				return createEnvExample(root)
-			},
-		},
-		{
-			Name:        "Update .gitignore",
-			Description: "Update .gitignore with standard entries",
-			Check:       gitignoreComplete,
-			Apply: func(root string, dryRun bool) error {
-				if dryRun {
-					return nil
-				}
-				return updateGitignore(root)
-			},
-		},
-		{
-				Name:        "Add GitHub Actions workflow",
-				Description: "Add deployment workflow",
-				Check: func(root string) bool {
-					return projectfs.Exists(filepath.Join(root, ".github/workflows/deploy.yml"))
-				},
-			Apply: func(root string, dryRun bool) error {
-				if dryRun {
-					return nil
-				}
-				return createGitHubWorkflow(root)
-			},
-		},
+		newRule(
+			"Pin Node version",
+			"Pin Node version to 20",
+			filePresentCheck(".nvmrc"),
+			writeFileApply(".nvmrc", "20\n"),
+		),
+		newRule(
+			"Add .env.example",
+			"Add .env.example template",
+			filePresentCheck(".env.example"),
+			createEnvExample,
+		),
+		newRule(
+			"Update .gitignore",
+			"Update .gitignore with standard entries",
+			gitignoreComplete,
+			updateGitignore,
+		),
+		newRule(
+			"Add GitHub Actions workflow",
+			"Add deployment workflow",
+			filePresentCheck(".github/workflows/deploy.yml"),
+			createGitHubWorkflow,
+		),
 	}
 }
 
@@ -145,32 +145,18 @@ func universalRules() []Rule {
 
 func viteRules() []Rule {
 	return []Rule{
-		{
-				Name:        "Add Vite Dockerfile",
-				Description: "Add production Dockerfile for Vite",
-				Check: func(root string) bool {
-					return projectfs.Exists(filepath.Join(root, "Dockerfile"))
-				},
-			Apply: func(root string, dryRun bool) error {
-				if dryRun {
-					return nil
-				}
-				return os.WriteFile(filepath.Join(root, "Dockerfile"), []byte(viteDockerfile), 0600)
-			},
-		},
-		{
-				Name:        "Add nginx config",
-				Description: "Add nginx.conf for SPA routing",
-				Check: func(root string) bool {
-					return projectfs.Exists(filepath.Join(root, "nginx.conf"))
-				},
-			Apply: func(root string, dryRun bool) error {
-				if dryRun {
-					return nil
-				}
-				return os.WriteFile(filepath.Join(root, "nginx.conf"), []byte(nginxConfig), 0600)
-			},
-		},
+		newRule(
+			"Add Vite Dockerfile",
+			"Add production Dockerfile for Vite",
+			filePresentCheck("Dockerfile"),
+			writeFileApply("Dockerfile", viteDockerfile),
+		),
+		newRule(
+			"Add nginx config",
+			"Add nginx.conf for SPA routing",
+			filePresentCheck("nginx.conf"),
+			writeFileApply("nginx.conf", nginxConfig),
+		),
 	}
 }
 
@@ -178,16 +164,11 @@ func viteRules() []Rule {
 
 func nextjsRules() []Rule {
 	return []Rule{
-		{
-				Name:        "Add Next.js Dockerfile",
-				Description: "Add production Dockerfile for Next.js",
-				Check: func(root string) bool {
-					return projectfs.Exists(filepath.Join(root, "Dockerfile"))
-				},
-			Apply: func(root string, dryRun bool) error {
-				if dryRun {
-					return nil
-				}
+		newRule(
+			"Add Next.js Dockerfile",
+			"Add production Dockerfile for Next.js",
+			filePresentCheck("Dockerfile"),
+			func(root string) error {
 				// Detect if static or SSR
 				outputType := detect.DetectOutputType(root, detect.NextJS)
 				if outputType == detect.Static {
@@ -195,7 +176,7 @@ func nextjsRules() []Rule {
 				}
 				return os.WriteFile(filepath.Join(root, "Dockerfile"), []byte(nextSSRDockerfile), 0600)
 			},
-		},
+		),
 	}
 }
 
