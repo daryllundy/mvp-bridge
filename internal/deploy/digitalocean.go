@@ -9,12 +9,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 )
 
 const doAPIBase = "https://api.digitalocean.com/v2"
+
+var doAPIBaseURL = mustParseURL(doAPIBase)
 
 // DODeployer handles deployments to DigitalOcean App Platform
 type DODeployer struct {
@@ -179,7 +182,7 @@ func (d *DODeployer) createApp(spec *DOAppSpec) (*DOAppResponse, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "POST", doAPIBase+"/apps", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", doAppsURL().String(), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +197,12 @@ func (d *DODeployer) updateApp(appID string, spec *DOAppSpec) (*DOAppResponse, e
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "PUT", fmt.Sprintf("%s/apps/%s", doAPIBase, appID), bytes.NewBuffer(jsonBody))
+	reqURL, err := doAppURL(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), "PUT", reqURL.String(), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +212,7 @@ func (d *DODeployer) updateApp(appID string, spec *DOAppSpec) (*DOAppResponse, e
 
 func (d *DODeployer) getApp() (*DOAppResponse, error) {
 	// List all apps and find by name
-	req, err := http.NewRequestWithContext(context.Background(), "GET", doAPIBase+"/apps", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", doAppsURL().String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -212,6 +220,11 @@ func (d *DODeployer) getApp() (*DOAppResponse, error) {
 	req.Header.Set("Authorization", "Bearer "+d.Token)
 	req.Header.Set("Content-Type", "application/json")
 
+	if err := validateTrustedURL(req.URL, doAPIBaseURL.Host); err != nil {
+		return nil, err
+	}
+
+	// #nosec G704 -- req.URL is restricted to the DigitalOcean API host by validateTrustedURL above.
 	resp, err := d.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -246,7 +259,12 @@ func (d *DODeployer) getApp() (*DOAppResponse, error) {
 }
 
 func (d *DODeployer) getAppByID(id string) (*DOAppResponse, error) {
-	req, err := http.NewRequestWithContext(context.Background(), "GET", fmt.Sprintf("%s/apps/%s", doAPIBase, id), nil)
+	reqURL, err := doAppURL(id)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), "GET", reqURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -255,6 +273,10 @@ func (d *DODeployer) getAppByID(id string) (*DOAppResponse, error) {
 }
 
 func (d *DODeployer) doRequest(req *http.Request) (*DOAppResponse, error) {
+	if err := validateTrustedURL(req.URL, doAPIBaseURL.Host); err != nil {
+		return nil, err
+	}
+
 	req.Header.Set("Authorization", "Bearer "+d.Token)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -279,6 +301,18 @@ func (d *DODeployer) doRequest(req *http.Request) (*DOAppResponse, error) {
 	}
 
 	return &result, nil
+}
+
+func doAppsURL() *url.URL {
+	return mustJoinURLPath(doAPIBaseURL, "apps")
+}
+
+func doAppURL(appID string) (*url.URL, error) {
+	if appID == "" {
+		return nil, fmt.Errorf("app ID cannot be empty")
+	}
+
+	return mustJoinURLPath(doAPIBaseURL, "apps", appID), nil
 }
 
 // WaitForDeployment polls until deployment completes or fails

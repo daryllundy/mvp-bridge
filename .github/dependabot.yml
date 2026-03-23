@@ -7,8 +7,6 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    reviewers:
-      - "maintainers"
     labels:
       - "dependencies"
       - "go"
@@ -20,6 +18,13 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      release-workflow-actions:
+        patterns:
+          - "docker/login-action"
+          - "docker/setup-buildx-action"
+          - "docker/metadata-action"
+          - "softprops/action-gh-release"
     labels:
       - "dependencies"
       - "github-actions"

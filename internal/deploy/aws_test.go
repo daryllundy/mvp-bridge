@@ -593,6 +593,44 @@ func TestGitHubTokenRequired(t *testing.T) {
 	}
 }
 
+func TestAWSAmplifyURLBuilders(t *testing.T) {
+	_ = os.Setenv("AWS_ACCESS_KEY_ID", "test-key")
+	_ = os.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret")
+	defer func() {
+		_ = os.Unsetenv("AWS_ACCESS_KEY_ID")
+		_ = os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+	}()
+
+	deployer, err := NewAWSDeployer("test-app", "https://github.com/user/repo", "main", "us-west-2")
+	if err != nil {
+		t.Fatalf("Failed to create deployer: %v", err)
+	}
+
+	appsURL, err := deployer.amplifyAppsURL()
+	if err != nil {
+		t.Fatalf("amplifyAppsURL() returned error: %v", err)
+	}
+	if got, want := appsURL.String(), "https://amplify.us-west-2.amazonaws.com/apps"; got != want {
+		t.Fatalf("amplifyAppsURL() = %q, want %q", got, want)
+	}
+
+	appURL, err := deployer.amplifyAppURL("app-123")
+	if err != nil {
+		t.Fatalf("amplifyAppURL() returned error: %v", err)
+	}
+	if got, want := appURL.String(), "https://amplify.us-west-2.amazonaws.com/apps/app-123"; got != want {
+		t.Fatalf("amplifyAppURL() = %q, want %q", got, want)
+	}
+
+	branchesURL, err := deployer.amplifyAppBranchesURL("app-123")
+	if err != nil {
+		t.Fatalf("amplifyAppBranchesURL() returned error: %v", err)
+	}
+	if got, want := branchesURL.String(), "https://amplify.us-west-2.amazonaws.com/apps/app-123/branches"; got != want {
+		t.Fatalf("amplifyAppBranchesURL() = %q, want %q", got, want)
+	}
+}
+
 // =============================================================================
 // AWS SigV4 Signing Tests
 // =============================================================================
@@ -784,10 +822,10 @@ func TestGetCanonicalHeaders(t *testing.T) {
 		{
 			name: "Only x-amz headers included",
 			headers: map[string][]string{
-				"Host":              {"example.com"},
-				"X-Amz-Date":        {"20230101T120000Z"},
+				"Host":                 {"example.com"},
+				"X-Amz-Date":           {"20230101T120000Z"},
 				"X-Amz-Content-Sha256": {"abc123"},
-				"User-Agent":        {"test-agent"}, // Should be excluded
+				"User-Agent":           {"test-agent"}, // Should be excluded
 			},
 			wantHeaders:    "host:example.com\nx-amz-content-sha256:abc123\nx-amz-date:20230101T120000Z\n",
 			wantSignedList: "host;x-amz-content-sha256;x-amz-date",

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -486,5 +487,47 @@ func TestDOStaticSiteDefaults(t *testing.T) {
 	}
 	if site.OutputDir != "dist" {
 		t.Errorf("Expected output dir 'dist', got '%s'", site.OutputDir)
+	}
+}
+
+func TestValidateTrustedURL(t *testing.T) {
+	tests := []struct {
+		name         string
+		rawURL       string
+		expectedHost string
+		wantErr      bool
+	}{
+		{
+			name:         "Accepts expected DigitalOcean host",
+			rawURL:       "https://api.digitalocean.com/v2/apps",
+			expectedHost: "api.digitalocean.com",
+			wantErr:      false,
+		},
+		{
+			name:         "Rejects unexpected host",
+			rawURL:       "https://example.com/v2/apps",
+			expectedHost: "api.digitalocean.com",
+			wantErr:      true,
+		},
+		{
+			name:         "Rejects non-https scheme",
+			rawURL:       "http://api.digitalocean.com/v2/apps",
+			expectedHost: "api.digitalocean.com",
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := url.Parse(tt.rawURL)
+			if err != nil {
+				t.Fatalf("Failed to parse URL: %v", err)
+			}
+
+			err = validateTrustedURL(parsed, tt.expectedHost)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateTrustedURL() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

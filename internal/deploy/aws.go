@@ -158,8 +158,12 @@ func (d *AWSDeployer) createApp(envVars map[string]string, buildCommand, outputD
 		return nil, err
 	}
 
-	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps"
-	req, err := http.NewRequestWithContext(context.Background(), "POST", endpoint, bytes.NewBuffer(jsonBody))
+	reqURL, err := d.amplifyAppsURL()
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), "POST", reqURL.String(), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -188,8 +192,12 @@ func (d *AWSDeployer) updateApp(appID string, envVars map[string]string, buildCo
 		return nil, err
 	}
 
-	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps/" + appID
-	req, err := http.NewRequestWithContext(context.Background(), "POST", endpoint, bytes.NewBuffer(jsonBody))
+	reqURL, err := d.amplifyAppURL(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), "POST", reqURL.String(), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -210,8 +218,12 @@ func (d *AWSDeployer) createBranch(appID string, envVars map[string]string) erro
 		return err
 	}
 
-	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps/" + appID + "/branches"
-	req, err := http.NewRequestWithContext(context.Background(), "POST", endpoint, bytes.NewBuffer(jsonBody))
+	reqURL, err := d.amplifyAppBranchesURL(appID)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), "POST", reqURL.String(), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -219,6 +231,11 @@ func (d *AWSDeployer) createBranch(appID string, envVars map[string]string) erro
 	req.Header.Set("Content-Type", "application/json")
 	d.signRequest(req)
 
+	if err := validateTrustedURL(req.URL, d.amplifyHost()); err != nil {
+		return err
+	}
+
+	// #nosec G704 -- req.URL is restricted to the AWS Amplify API host by validateTrustedURL above.
 	resp, err := d.client.Do(req)
 	if err != nil {
 		return err
@@ -237,8 +254,12 @@ func (d *AWSDeployer) createBranch(appID string, envVars map[string]string) erro
 }
 
 func (d *AWSDeployer) getApp() (*AmplifyAppResponse, error) {
-	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps"
-	req, err := http.NewRequestWithContext(context.Background(), "GET", endpoint, nil)
+	reqURL, err := d.amplifyAppsURL()
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), "GET", reqURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -278,8 +299,12 @@ func (d *AWSDeployer) getApp() (*AmplifyAppResponse, error) {
 }
 
 func (d *AWSDeployer) getAppByID(appID string) (*AmplifyAppResponse, error) {
-	endpoint := fmt.Sprintf(awsAmplifyAPIBase, d.Region) + "/apps/" + appID
-	req, err := http.NewRequestWithContext(context.Background(), "GET", endpoint, nil)
+	reqURL, err := d.amplifyAppURL(appID)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), "GET", reqURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -288,6 +313,10 @@ func (d *AWSDeployer) getAppByID(appID string) (*AmplifyAppResponse, error) {
 }
 
 func (d *AWSDeployer) doRequest(req *http.Request) (*AmplifyAppResponse, error) {
+	if err := validateTrustedURL(req.URL, d.amplifyHost()); err != nil {
+		return nil, err
+	}
+
 	d.signRequest(req)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -312,6 +341,53 @@ func (d *AWSDeployer) doRequest(req *http.Request) (*AmplifyAppResponse, error) 
 	}
 
 	return &result, nil
+}
+
+func (d *AWSDeployer) amplifyBaseURL() (*url.URL, error) {
+	if d.Region == "" {
+		return nil, fmt.Errorf("region cannot be empty")
+	}
+
+	return url.Parse(fmt.Sprintf(awsAmplifyAPIBase, d.Region))
+}
+
+func (d *AWSDeployer) amplifyAppsURL() (*url.URL, error) {
+	baseURL, err := d.amplifyBaseURL()
+	if err != nil {
+		return nil, err
+	}
+
+	return mustJoinURLPath(baseURL, "apps"), nil
+}
+
+func (d *AWSDeployer) amplifyAppURL(appID string) (*url.URL, error) {
+	if appID == "" {
+		return nil, fmt.Errorf("app ID cannot be empty")
+	}
+
+	baseURL, err := d.amplifyBaseURL()
+	if err != nil {
+		return nil, err
+	}
+
+	return mustJoinURLPath(baseURL, "apps", appID), nil
+}
+
+func (d *AWSDeployer) amplifyAppBranchesURL(appID string) (*url.URL, error) {
+	baseURL, err := d.amplifyBaseURL()
+	if err != nil {
+		return nil, err
+	}
+
+	if appID == "" {
+		return nil, fmt.Errorf("app ID cannot be empty")
+	}
+
+	return mustJoinURLPath(baseURL, "apps", appID, "branches"), nil
+}
+
+func (d *AWSDeployer) amplifyHost() string {
+	return fmt.Sprintf("amplify.%s.amazonaws.com", d.Region)
 }
 
 // signRequest adds AWS Signature Version 4 authentication
