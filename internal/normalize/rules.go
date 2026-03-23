@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"mvpbridge/internal/detect"
+	"mvpbridge/internal/projectfs"
 )
 
 // Rule represents a single normalization rule that can check and fix deployment issues
@@ -88,11 +89,11 @@ func (n *Normalizer) Run() error {
 func universalRules() []Rule {
 	return []Rule{
 		{
-			Name:        "Pin Node version",
-			Description: "Pin Node version to 20",
-			Check: func(root string) bool {
-				return fileExists(filepath.Join(root, ".nvmrc"))
-			},
+				Name:        "Pin Node version",
+				Description: "Pin Node version to 20",
+				Check: func(root string) bool {
+					return projectfs.Exists(filepath.Join(root, ".nvmrc"))
+				},
 			Apply: func(root string, dryRun bool) error {
 				if dryRun {
 					return nil
@@ -101,11 +102,11 @@ func universalRules() []Rule {
 			},
 		},
 		{
-			Name:        "Add .env.example",
-			Description: "Add .env.example template",
-			Check: func(root string) bool {
-				return fileExists(filepath.Join(root, ".env.example"))
-			},
+				Name:        "Add .env.example",
+				Description: "Add .env.example template",
+				Check: func(root string) bool {
+					return projectfs.Exists(filepath.Join(root, ".env.example"))
+				},
 			Apply: func(root string, dryRun bool) error {
 				if dryRun {
 					return nil
@@ -125,11 +126,11 @@ func universalRules() []Rule {
 			},
 		},
 		{
-			Name:        "Add GitHub Actions workflow",
-			Description: "Add deployment workflow",
-			Check: func(root string) bool {
-				return fileExists(filepath.Join(root, ".github/workflows/deploy.yml"))
-			},
+				Name:        "Add GitHub Actions workflow",
+				Description: "Add deployment workflow",
+				Check: func(root string) bool {
+					return projectfs.Exists(filepath.Join(root, ".github/workflows/deploy.yml"))
+				},
 			Apply: func(root string, dryRun bool) error {
 				if dryRun {
 					return nil
@@ -145,11 +146,11 @@ func universalRules() []Rule {
 func viteRules() []Rule {
 	return []Rule{
 		{
-			Name:        "Add Vite Dockerfile",
-			Description: "Add production Dockerfile for Vite",
-			Check: func(root string) bool {
-				return fileExists(filepath.Join(root, "Dockerfile"))
-			},
+				Name:        "Add Vite Dockerfile",
+				Description: "Add production Dockerfile for Vite",
+				Check: func(root string) bool {
+					return projectfs.Exists(filepath.Join(root, "Dockerfile"))
+				},
 			Apply: func(root string, dryRun bool) error {
 				if dryRun {
 					return nil
@@ -158,11 +159,11 @@ func viteRules() []Rule {
 			},
 		},
 		{
-			Name:        "Add nginx config",
-			Description: "Add nginx.conf for SPA routing",
-			Check: func(root string) bool {
-				return fileExists(filepath.Join(root, "nginx.conf"))
-			},
+				Name:        "Add nginx config",
+				Description: "Add nginx.conf for SPA routing",
+				Check: func(root string) bool {
+					return projectfs.Exists(filepath.Join(root, "nginx.conf"))
+				},
 			Apply: func(root string, dryRun bool) error {
 				if dryRun {
 					return nil
@@ -178,11 +179,11 @@ func viteRules() []Rule {
 func nextjsRules() []Rule {
 	return []Rule{
 		{
-			Name:        "Add Next.js Dockerfile",
-			Description: "Add production Dockerfile for Next.js",
-			Check: func(root string) bool {
-				return fileExists(filepath.Join(root, "Dockerfile"))
-			},
+				Name:        "Add Next.js Dockerfile",
+				Description: "Add production Dockerfile for Next.js",
+				Check: func(root string) bool {
+					return projectfs.Exists(filepath.Join(root, "Dockerfile"))
+				},
 			Apply: func(root string, dryRun bool) error {
 				if dryRun {
 					return nil
@@ -196,13 +197,6 @@ func nextjsRules() []Rule {
 			},
 		},
 	}
-}
-
-// Helper functions
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func gitCommit(root, message string) error {
@@ -310,19 +304,7 @@ func createGitHubWorkflow(root string) error {
 }
 
 func readFileInRoot(root, rel string) ([]byte, error) {
-	base := filepath.Clean(root)
-	path := filepath.Clean(filepath.Join(base, rel))
-
-	relPath, err := filepath.Rel(base, path)
-	if err != nil {
-		return nil, err
-	}
-	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
-		return nil, fmt.Errorf("path escapes project root: %s", rel)
-	}
-
-	// #nosec G304 -- path is normalized and constrained to project root above.
-	return os.ReadFile(path)
+	return projectfs.ReadFileInRoot(root, rel)
 }
 
 // Templates

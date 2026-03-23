@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	"mvpbridge/internal/detect"
+	"mvpbridge/internal/projectfs"
 )
 
 const (
@@ -136,17 +136,5 @@ func (c *Config) GetFramework() detect.Framework {
 }
 
 func readFileInRoot(root, rel string) ([]byte, error) {
-	base := filepath.Clean(root)
-	path := filepath.Clean(filepath.Join(base, rel))
-
-	relPath, err := filepath.Rel(base, path)
-	if err != nil {
-		return nil, err
-	}
-	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
-		return nil, fmt.Errorf("path escapes project root: %s", rel)
-	}
-
-	// #nosec G304 -- path is normalized and constrained to project root above.
-	return os.ReadFile(path)
+	return projectfs.ReadFileInRoot(root, rel)
 }

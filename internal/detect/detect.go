@@ -6,9 +6,10 @@ package detect
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"mvpbridge/internal/projectfs"
 )
 
 // Framework represents a supported frontend framework type
@@ -122,7 +123,7 @@ func DetectFramework(root string) (Framework, error) {
 	// Check for Next.js first (more specific)
 	nextConfigs := []string{"next.config.js", "next.config.mjs", "next.config.ts"}
 	for _, cfg := range nextConfigs {
-		if fileExists(filepath.Join(root, cfg)) {
+		if projectfs.Exists(filepath.Join(root, cfg)) {
 			return NextJS, nil
 		}
 	}
@@ -130,7 +131,7 @@ func DetectFramework(root string) (Framework, error) {
 	// Check for Vite
 	viteConfigs := []string{"vite.config.js", "vite.config.ts", "vite.config.mjs"}
 	for _, cfg := range viteConfigs {
-		if fileExists(filepath.Join(root, cfg)) {
+		if projectfs.Exists(filepath.Join(root, cfg)) {
 			return Vite, nil
 		}
 	}
@@ -151,10 +152,10 @@ func DetectFramework(root string) (Framework, error) {
 
 // DetectPackageManager determines npm, yarn, or pnpm
 func DetectPackageManager(root string) PackageManager {
-	if fileExists(filepath.Join(root, "pnpm-lock.yaml")) {
+	if projectfs.Exists(filepath.Join(root, "pnpm-lock.yaml")) {
 		return PNPM
 	}
-	if fileExists(filepath.Join(root, "yarn.lock")) {
+	if projectfs.Exists(filepath.Join(root, "yarn.lock")) {
 		return Yarn
 	}
 	return NPM
@@ -236,11 +237,11 @@ func CheckMissingFiles(root string) []Issue {
 		{"Dockerfile", "MISSING_DOCKERFILE", "Missing Dockerfile"},
 		{".env.example", "MISSING_ENV_EXAMPLE", "No .env.example"},
 		{".github/workflows", "MISSING_GHA", "No GitHub Actions workflow"},
-		{".gitignore", "MISSING_GITIGNORE", "No .gitignore"},
+			{".gitignore", "MISSING_GITIGNORE", "No .gitignore"},
 	}
 
 	for _, c := range checks {
-		if !fileExists(filepath.Join(root, c.path)) {
+		if !projectfs.Exists(filepath.Join(root, c.path)) {
 			issues = append(issues, Issue{
 				Code:        c.code,
 				Description: c.description,
@@ -250,13 +251,6 @@ func CheckMissingFiles(root string) []Issue {
 	}
 
 	return issues
-}
-
-// Helper functions
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func readPackageJSON(root string) (*packageJSON, error) {
@@ -274,17 +268,5 @@ func readPackageJSON(root string) (*packageJSON, error) {
 }
 
 func readFileInRoot(root, rel string) ([]byte, error) {
-	base := filepath.Clean(root)
-	path := filepath.Clean(filepath.Join(base, rel))
-
-	relPath, err := filepath.Rel(base, path)
-	if err != nil {
-		return nil, err
-	}
-	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
-		return nil, fmt.Errorf("path escapes project root: %s", rel)
-	}
-
-	// #nosec G304 -- path is normalized and constrained to project root above.
-	return os.ReadFile(path)
+	return projectfs.ReadFileInRoot(root, rel)
 }
