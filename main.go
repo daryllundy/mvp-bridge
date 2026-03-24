@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "0.1.0"
+var version = "0.2.0"
 
 type gcpDeployer interface {
 	Deploy(isStatic bool, envVars map[string]string) (*deploy.CloudRunServiceResponse, error)

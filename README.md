@@ -19,11 +19,11 @@ mvpbridge deploy do
 
 ## Project Status
 
-- Active early-stage project (`v0.1.x` line of development)
-- Current CLI commands: `init`, `inspect`, `normalize`, `deploy [do|aws|gcp|azure]`
+- Active early-stage project (`v0.2.x` line of development)
+- Current CLI commands: `init`, `inspect`, `normalize`, `deploy [do|aws|gcp|azure|local]`
 - Framework support today: Vite and Next.js
 - Primary deploy path: DigitalOcean App Platform
-- Additional supported targets: AWS Amplify, Google Cloud Run, Azure Container Apps
+- Additional supported targets: AWS Amplify, Google Cloud Run, Azure Container Apps, local Docker Compose workspace generation
 - Current test suite passes with `go test ./...`
 
 ## Why Builders May Care
@@ -58,7 +58,7 @@ export DIGITALOCEAN_TOKEN=your_token_here
 mvpbridge deploy do
 ```
 
-DigitalOcean is the clearest default path right now. AWS, GCP, and Azure are also supported if you want to use an existing cloud setup.
+DigitalOcean is the clearest default path right now. AWS, GCP, Azure, and a local Docker Compose workspace target are also supported if you want to use an existing cloud setup or generate a local deployment workspace.
 
 ## Current Capabilities
 
@@ -103,6 +103,7 @@ Also supported:
 - AWS Amplify via `mvpbridge deploy aws`
 - Google Cloud Run via `mvpbridge deploy gcp`
 - Azure Container Apps via `mvpbridge deploy azure`
+- Local Docker Compose workspace generation via `mvpbridge deploy local`
 
 ## Example Config
 
@@ -159,7 +160,7 @@ mvpbridge init
 
 Optional flags:
 
-- `--target`, `-t`: `do`, `aws`, `gcp`, `azure`
+- `--target`, `-t`: `do`, `aws`, `gcp`, `azure`, `local`
 - `--framework`, `-f`: `vite`, `nextjs`
 
 If no target is provided, MVPBridge defaults to `do`.
@@ -203,6 +204,7 @@ mvpbridge deploy do
 mvpbridge deploy aws
 mvpbridge deploy gcp
 mvpbridge deploy azure
+mvpbridge deploy local
 ```
 
 ## Environment Variables

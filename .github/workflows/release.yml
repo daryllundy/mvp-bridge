@@ -76,12 +76,23 @@ jobs:
         mvpbridge init
         mvpbridge inspect
         mvpbridge normalize
-        mvpbridge deploy do  # or 'aws'
+        mvpbridge deploy do
+        ```
+
+        Additional deploy targets:
+        ```bash
+        mvpbridge deploy aws
+        mvpbridge deploy gcp
+        mvpbridge deploy azure
+        mvpbridge deploy local
         ```
 
         ### What's Included
         - ✅ DigitalOcean App Platform deployment
         - ✅ AWS Amplify deployment
+        - ✅ Google Cloud Run deployment
+        - ✅ Azure Container Apps deployment
+        - ✅ Local Docker Compose workspace generation
         - ✅ Vite + React support
         - ✅ Next.js support (static & SSR)
         - ✅ Comprehensive test suite (130+ tests)
