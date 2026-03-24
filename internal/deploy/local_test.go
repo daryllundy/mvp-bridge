@@ -142,6 +142,47 @@ func TestGenerateLocalWorkspaceSQLite(t *testing.T) {
 	}
 }
 
+func TestCopyRelativeFileRejectsTraversal(t *testing.T) {
+	root := t.TempDir()
+	dst := t.TempDir()
+
+	err := copyRelativeFile(root, dst, "../secret")
+	if err == nil {
+		t.Fatal("expected traversal path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "escapes root") {
+		t.Fatalf("expected escape error, got %v", err)
+	}
+}
+
+func TestCopyRelativeFileRejectsAbsolutePath(t *testing.T) {
+	root := t.TempDir()
+	dst := t.TempDir()
+
+	err := copyRelativeFile(root, dst, filepath.Join(root, "file.txt"))
+	if err == nil {
+		t.Fatal("expected absolute path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "absolute paths are not allowed") {
+		t.Fatalf("expected absolute path error, got %v", err)
+	}
+}
+
+func TestCopyRelativeFileCopiesValidatedPath(t *testing.T) {
+	root := t.TempDir()
+	dst := t.TempDir()
+	writeLocalTestFile(t, filepath.Join(root, "src", "main.ts"), "console.log('ok')")
+
+	if err := copyRelativeFile(root, dst, filepath.Join("src", "main.ts")); err != nil {
+		t.Fatalf("copyRelativeFile returned error: %v", err)
+	}
+
+	got := readLocalTestFile(t, filepath.Join(dst, "src", "main.ts"))
+	if got != "console.log('ok')" {
+		t.Fatalf("unexpected copied content: %q", got)
+	}
+}
+
 func writeLocalTestFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

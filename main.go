@@ -528,11 +528,11 @@ func deployAWS(cfg *config.Config) error {
 	}
 	buildCommand := d.BuildCommand
 	if buildCommand == "" {
-		buildCommand = "npm run build"
+		buildCommand = deploy.DefaultBuildCommand
 	}
 	outputDir := d.OutputDir
 	if outputDir == "" {
-		outputDir = "dist"
+		outputDir = deploy.DefaultOutputDir
 	}
 
 	// Determine if static
@@ -679,12 +679,12 @@ func deployLocal(cfg *config.Config) error {
 
 	buildCommand := d.BuildCommand
 	if buildCommand == "" {
-		buildCommand = "npm run build"
+		buildCommand = deploy.DefaultBuildCommand
 	}
 
 	outputDir := d.OutputDir
 	if outputDir == "" {
-		outputDir = "dist"
+		outputDir = deploy.DefaultOutputDir
 	}
 
 	fmt.Println("[1/4] Inspecting project shape... ✓")

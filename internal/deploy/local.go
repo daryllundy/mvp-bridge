@@ -38,72 +38,104 @@ type LocalWorkspaceResult struct {
 
 // GenerateLocalWorkspace writes a self-contained Docker Compose workspace under local-deploy.
 func GenerateLocalWorkspace(opts LocalWorkspaceOptions) (*LocalWorkspaceResult, error) {
-	root := opts.Root
+	absRoot, err := resolveWorkspaceRoot(opts.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	outputDir := filepath.Join(absRoot, localDeployDirName)
+	if err := initializeWorkspace(outputDir); err != nil {
+		return nil, err
+	}
+
+	if err := copyProjectSnapshot(absRoot, appSnapshotDir(outputDir)); err != nil {
+		return nil, err
+	}
+
+	opts = normalizeLocalWorkspaceOptions(opts)
+	persistence := detect.DetectPersistence(absRoot)
+	envVars := buildLocalEnvVars(opts.EnvVars, persistence)
+
+	if err := writeLocalWorkspaceAssets(outputDir, opts, persistence, envVars); err != nil {
+		return nil, err
+	}
+
+	return buildLocalWorkspaceResult(absRoot, outputDir, persistence), nil
+}
+
+func resolveWorkspaceRoot(root string) (string, error) {
 	if root == "" {
 		root = "."
 	}
 
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return nil, fmt.Errorf("resolve root: %w", err)
+		return "", fmt.Errorf("resolve root: %w", err)
 	}
 
-	outputDir := filepath.Join(absRoot, localDeployDirName)
+	return absRoot, nil
+}
+
+func initializeWorkspace(outputDir string) error {
 	if err := os.RemoveAll(outputDir); err != nil {
-		return nil, fmt.Errorf("reset local workspace: %w", err)
+		return fmt.Errorf("reset local workspace: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Join(outputDir, "app"), 0o750); err != nil {
-		return nil, fmt.Errorf("create local workspace: %w", err)
+	if err := os.MkdirAll(appSnapshotDir(outputDir), 0o750); err != nil {
+		return fmt.Errorf("create local workspace: %w", err)
 	}
+	return nil
+}
 
-	if err := copyProjectSnapshot(absRoot, filepath.Join(outputDir, "app")); err != nil {
-		return nil, err
-	}
+func appSnapshotDir(outputDir string) string {
+	return filepath.Join(outputDir, "app")
+}
 
+func normalizeLocalWorkspaceOptions(opts LocalWorkspaceOptions) LocalWorkspaceOptions {
 	if opts.BuildCommand == "" {
-		opts.BuildCommand = "npm run build"
+		opts.BuildCommand = DefaultBuildCommand
 	}
 	if opts.OutputDir == "" {
-		opts.OutputDir = "dist"
+		opts.OutputDir = DefaultOutputDir
 	}
+	return opts
+}
 
-	persistence := detect.DetectPersistence(absRoot)
-	envVars := buildLocalEnvVars(opts.EnvVars, persistence)
-
+func writeLocalWorkspaceAssets(outputDir string, opts LocalWorkspaceOptions, persistence detect.Persistence, envVars map[string]string) error {
 	if err := os.WriteFile(filepath.Join(outputDir, ".env.app"), []byte(renderEnvFile(envVars)), 0o600); err != nil {
-		return nil, fmt.Errorf("write app env file: %w", err)
+		return fmt.Errorf("write app env file: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(outputDir, ".env.example"), []byte(renderEnvTemplate(envVars)), 0o600); err != nil {
-		return nil, fmt.Errorf("write env example: %w", err)
+		return fmt.Errorf("write env example: %w", err)
+	}
+	return writeStaticWorkspaceAssets(outputDir, opts, persistence)
+}
+
+func writeStaticWorkspaceAssets(outputDir string, opts LocalWorkspaceOptions, persistence detect.Persistence) error {
+	files := map[string]string{
+		"nginx.prod.conf":     renderNginxProdConfig(opts.OutputType),
+		"nginx.dev.conf":      renderNginxDevConfig(),
+		"Dockerfile.web":      renderWebDockerfile(opts),
+		"Dockerfile.app":      renderAppDockerfile(opts.PackageManager),
+		"docker-compose.yml":  renderComposeProd(opts, persistence),
+		"docker-compose.dev.yml": renderComposeDev(opts, persistence),
+		"README.md":           renderLocalReadme(opts, persistence),
 	}
 
-	if err := os.WriteFile(filepath.Join(outputDir, "nginx.prod.conf"), []byte(renderNginxProdConfig(opts.OutputType)), 0o600); err != nil {
-		return nil, fmt.Errorf("write prod nginx config: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(outputDir, "nginx.dev.conf"), []byte(renderNginxDevConfig()), 0o600); err != nil {
-		return nil, fmt.Errorf("write dev nginx config: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(outputDir, "Dockerfile.web"), []byte(renderWebDockerfile(opts)), 0o600); err != nil {
-		return nil, fmt.Errorf("write web Dockerfile: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(outputDir, "Dockerfile.app"), []byte(renderAppDockerfile(opts.PackageManager)), 0o600); err != nil {
-		return nil, fmt.Errorf("write app Dockerfile: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(outputDir, "docker-compose.yml"), []byte(renderComposeProd(opts, persistence)), 0o600); err != nil {
-		return nil, fmt.Errorf("write compose file: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(outputDir, "docker-compose.dev.yml"), []byte(renderComposeDev(opts, persistence)), 0o600); err != nil {
-		return nil, fmt.Errorf("write dev compose file: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(outputDir, "README.md"), []byte(renderLocalReadme(opts, persistence)), 0o600); err != nil {
-		return nil, fmt.Errorf("write README: %w", err)
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(outputDir, name), []byte(content), 0o600); err != nil {
+			return fmt.Errorf("write %s: %w", name, err)
+		}
 	}
 
+	return nil
+}
+
+func buildLocalWorkspaceResult(absRoot, outputDir string, persistence detect.Persistence) *LocalWorkspaceResult {
 	return &LocalWorkspaceResult{
 		OutputDir:    outputDir,
 		Persistence:  persistence,
 		OriginalRoot: absRoot,
-	}, nil
+	}
 }
 
 func copyProjectSnapshot(srcRoot, dstRoot string) error {
@@ -133,7 +165,7 @@ func copyProjectSnapshot(srcRoot, dstRoot string) error {
 			return os.MkdirAll(dstPath, 0o750)
 		}
 
-		return copyFile(path, dstPath)
+		return copyRelativeFile(srcRoot, dstRoot, rel)
 	})
 }
 
@@ -150,28 +182,62 @@ func shouldSkipSnapshotFile(name string) bool {
 	return name == ".DS_Store"
 }
 
-func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
+func copyRelativeFile(srcRoot, dstRoot, rel string) error {
+	srcPath, err := rootedPath(srcRoot, rel)
 	if err != nil {
-		return fmt.Errorf("open %s: %w", src, err)
-	}
-	defer func() { _ = srcFile.Close() }()
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 		return err
 	}
 
-	dstFile, err := os.Create(dst)
+	dstPath, err := rootedPath(dstRoot, rel)
 	if err != nil {
-		return fmt.Errorf("create %s: %w", dst, err)
+		return err
+	}
+
+	// #nosec G304 -- srcPath is derived from a validated repo-relative path rooted under srcRoot.
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", srcPath, err)
+	}
+	defer func() { _ = srcFile.Close() }()
+
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0o750); err != nil {
+		return err
+	}
+
+	// #nosec G304 -- dstPath is derived from a validated relative path rooted under the generated workspace.
+	dstFile, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", dstPath, err)
 	}
 	defer func() { _ = dstFile.Close() }()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return fmt.Errorf("copy %s: %w", src, err)
+		return fmt.Errorf("copy %s: %w", srcPath, err)
 	}
 
 	return nil
+}
+
+func rootedPath(root, rel string) (string, error) {
+	if rel == "" {
+		return "", fmt.Errorf("relative path is required")
+	}
+	if filepath.IsAbs(rel) {
+		return "", fmt.Errorf("absolute paths are not allowed: %s", rel)
+	}
+
+	cleanRel := filepath.Clean(rel)
+	if cleanRel == "." || cleanRel == ".." || strings.HasPrefix(cleanRel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes root: %s", rel)
+	}
+
+	rootClean := filepath.Clean(root)
+	fullPath := filepath.Join(rootClean, cleanRel)
+	if fullPath != rootClean && !strings.HasPrefix(fullPath, rootClean+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes root: %s", rel)
+	}
+
+	return fullPath, nil
 }
 
 func buildLocalEnvVars(input map[string]string, persistence detect.Persistence) map[string]string {
