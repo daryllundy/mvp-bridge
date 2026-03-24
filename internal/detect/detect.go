@@ -6,6 +6,7 @@ package detect
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -62,6 +63,24 @@ type Issue struct {
 	Code        string
 	Description string
 	Fixable     bool
+}
+
+// PersistenceKind describes the best-effort persistence backend inferred from the repo.
+type PersistenceKind string
+
+const (
+	// PersistenceNone means no persistence backend was confidently inferred.
+	PersistenceNone PersistenceKind = "none"
+	// PersistencePostgres means the repo appears to use PostgreSQL.
+	PersistencePostgres PersistenceKind = "postgres"
+	// PersistenceSQLite means the repo appears to use SQLite.
+	PersistenceSQLite PersistenceKind = "sqlite"
+)
+
+// Persistence stores the inferred persistence backend and why it was chosen.
+type Persistence struct {
+	Kind   PersistenceKind
+	Reason string
 }
 
 type packageJSON struct {
@@ -261,6 +280,157 @@ func detectBuildConfig(scan *scanContext, fw Framework) (buildCmd, outputDir str
 	}
 
 	return buildCmd, outputDir
+}
+
+// DetectPersistence infers whether the current repo expects PostgreSQL or SQLite.
+func DetectPersistence(root string) Persistence {
+	scan := newScanContext(root)
+	score := persistenceScore{}
+
+	pkg, err := scan.readPackageJSON()
+	if err == nil {
+		score = scorePersistenceDependencies(pkg, score)
+	}
+
+	for _, rel := range likelyPersistenceFiles(root) {
+		data, err := scan.readFile(rel)
+		if err != nil {
+			continue
+		}
+		score = scorePersistenceFile(rel, strings.ToLower(string(data)), score)
+	}
+
+	return resolvePersistence(score)
+}
+
+func hasDependency(pkg *packageJSON, name string) bool {
+	if pkg == nil {
+		return false
+	}
+	if _, ok := pkg.Dependencies[name]; ok {
+		return true
+	}
+	if _, ok := pkg.DevDependencies[name]; ok {
+		return true
+	}
+	return false
+}
+
+func likelyPersistenceFiles(root string) []string {
+	paths := seedPersistenceFiles()
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		seen[path] = struct{}{}
+	}
+
+	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", "node_modules", "dist", ".next", "out", "local-deploy":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		name := d.Name()
+		switch name {
+		case ".env", ".env.example", "schema.prisma", "knexfile.js", "knexfile.ts", "drizzle.config.js", "drizzle.config.ts":
+			rel, relErr := filepath.Rel(root, path)
+			if relErr == nil {
+				rel = filepath.ToSlash(rel)
+				if _, ok := seen[rel]; !ok {
+					seen[rel] = struct{}{}
+					paths = append(paths, rel)
+				}
+			}
+		}
+
+			return nil
+	}); err != nil {
+		return seedPersistenceFiles()
+	}
+
+	return paths
+}
+
+type persistenceScore struct {
+	postgres int
+	sqlite   int
+	reasons  []string
+}
+
+func seedPersistenceFiles() []string {
+	return []string{".env", ".env.example", "prisma/schema.prisma", "knexfile.js", "knexfile.ts", "drizzle.config.js", "drizzle.config.ts"}
+}
+
+func scorePersistenceDependencies(pkg *packageJSON, score persistenceScore) persistenceScore {
+	score = addDependencySignals(pkg, score, []string{"pg", "postgres", "@neondatabase/serverless", "postgresql", "pg-pool"}, true)
+	score = addDependencySignals(pkg, score, []string{"sqlite3", "better-sqlite3", "@libsql/client", "sql.js"}, false)
+	return score
+}
+
+func addDependencySignals(pkg *packageJSON, score persistenceScore, deps []string, postgres bool) persistenceScore {
+	for _, dep := range deps {
+		if !hasDependency(pkg, dep) {
+			continue
+		}
+		if postgres {
+			score.postgres += 2
+		} else {
+			score.sqlite += 2
+		}
+		score.reasons = append(score.reasons, "dependency:"+dep)
+	}
+	return score
+}
+
+func scorePersistenceFile(rel, content string, score persistenceScore) persistenceScore {
+	if hasPostgresContent(content) {
+		score.postgres += 2
+		score.reasons = append(score.reasons, rel)
+	}
+
+	if hasSQLiteContent(content) {
+		score.sqlite += 2
+		score.reasons = append(score.reasons, rel)
+	}
+
+	if strings.Contains(content, "database_url") || strings.Contains(content, "pghost") || strings.Contains(content, "postgres_") {
+		score.postgres++
+	}
+
+	return score
+}
+
+func hasPostgresContent(content string) bool {
+	return strings.Contains(content, `provider = "postgresql"`) ||
+		strings.Contains(content, "postgresql://") ||
+		strings.Contains(content, "postgres://") ||
+		strings.Contains(content, "pg_host") ||
+		strings.Contains(content, "postgres_user")
+}
+
+func hasSQLiteContent(content string) bool {
+	return strings.Contains(content, `provider = "sqlite"`) ||
+		strings.Contains(content, ".sqlite") ||
+		strings.Contains(content, ".db") ||
+		strings.Contains(content, "file:./") ||
+		strings.Contains(content, "better-sqlite3")
+}
+
+func resolvePersistence(score persistenceScore) Persistence {
+	switch {
+	case score.postgres >= 2 && score.postgres > score.sqlite:
+		return Persistence{Kind: PersistencePostgres, Reason: strings.Join(score.reasons, ", ")}
+	case score.sqlite >= 2 && score.sqlite > score.postgres:
+		return Persistence{Kind: PersistenceSQLite, Reason: strings.Join(score.reasons, ", ")}
+	default:
+		return Persistence{Kind: PersistenceNone}
+	}
 }
 
 // DetectOutputType determines if output is static or SSR

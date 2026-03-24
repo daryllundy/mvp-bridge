@@ -332,6 +332,23 @@ func TestNewFromDetection(t *testing.T) {
 				Target:    "azure",
 			},
 		},
+		{
+			name: "Local target preserved",
+			detection: &detect.Detection{
+				Framework:      detect.Vite,
+				PackageManager: detect.NPM,
+				NodeVersion:    "20",
+				BuildCommand:   "npm run build",
+				OutputDir:      "dist",
+				OutputType:     detect.Static,
+			},
+			target: "local",
+			expected: &Config{
+				Version:   1,
+				Framework: "vite",
+				Target:    "local",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -405,6 +422,15 @@ func TestValidate(t *testing.T) {
 				Version:   1,
 				Framework: "vite",
 				Target:    "azure",
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid local config",
+			config: &Config{
+				Version:   1,
+				Framework: "vite",
+				Target:    "local",
 			},
 			wantErr: false,
 		},

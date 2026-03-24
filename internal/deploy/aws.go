@@ -552,10 +552,10 @@ func sha256Hash(data []byte) string {
 
 func (d *AWSDeployer) buildSpec(buildCommand, outputDir string) string {
 	if buildCommand == "" {
-		buildCommand = "npm run build"
+		buildCommand = DefaultBuildCommand
 	}
 	if outputDir == "" {
-		outputDir = "dist"
+		outputDir = DefaultOutputDir
 	}
 
 	return fmt.Sprintf(`version: 1
