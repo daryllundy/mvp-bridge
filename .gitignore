@@ -31,3 +31,4 @@ Thumbs.db
 # MVPBridge config (for testing)
 .mvpbridge/
 PRD.md
+ci-fix-blog-post.md
